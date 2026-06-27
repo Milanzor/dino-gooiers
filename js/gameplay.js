@@ -38,11 +38,14 @@
 
   // ── Enemy config ──────────────────────────────────────────────────────────
   const ENEMY_CFG = {
-    grunt:      { r: 20, color: '#2a6248', bodyColor: '#3a7a58', hp: 45,  pts: 100, name: 'Grommert'   },
-    shieldback: { r: 24, color: '#385a38', bodyColor: '#4a7248', hp: 85,  pts: 200, name: 'Schildrug'  },
-    helmet:     { r: 20, color: '#484868', bodyColor: '#5a5a80', hp: 65,  pts: 150, name: 'Staalhelm'  },
-    king:       { r: 28, color: '#7a3828', bodyColor: '#924232', hp: 130, pts: 350, name: 'Dinovorst'  },
-    bone:       { r: 23, color: '#9a9a88', bodyColor: '#b4b4a0', hp: 95,  pts: 250, name: 'Botdino'    },
+    grunt:              { r: 20, color: '#2a6248', bodyColor: '#3a7a58', hp: 45,  pts: 100,  name: 'Grommert'       },
+    shieldback:         { r: 24, color: '#385a38', bodyColor: '#4a7248', hp: 85,  pts: 200,  name: 'Schildrug'      },
+    helmet:             { r: 20, color: '#484868', bodyColor: '#5a5a80', hp: 65,  pts: 150,  name: 'Staalhelm'      },
+    king:               { r: 28, color: '#7a3828', bodyColor: '#924232', hp: 130, pts: 350,  name: 'Dinovorst'      },
+    bone:               { r: 23, color: '#9a9a88', bodyColor: '#b4b4a0', hp: 95,  pts: 250,  name: 'Botdino'        },
+    boss_tyranno_king:  { r: 40, color: '#6a1a08', bodyColor: '#8a2010', hp: 500, pts: 2000, name: 'Tiran-Koning'   },
+    boss_armored_ceratops: { r: 38, color: '#2a4838', bodyColor: '#3a6048', hp: 450, pts: 1800, name: 'Gepantserde Ceratops' },
+    boss_mega_rex:      { r: 44, color: '#1a1a3a', bodyColor: '#2a2a5a', hp: 600, pts: 2500, name: 'Mega-Rex'       },
   };
 
   // ── Module state ──────────────────────────────────────────────────────────
@@ -99,17 +102,22 @@
     // Left wall (prevents dino rolling off)
     M.World.add(world, M.Bodies.rectangle(-20, DH / 2, 40, DH, { isStatic: true, label: 'wall' }));
 
+    // Block type code → BLOCK_T key mapping (levels.js uses W/S/T/X/G codes)
+    const BLOCK_TYPE_MAP = { W: 'wood', S: 'stone', T: 'steel', X: 'wood', G: 'ice' };
+
     // Blocks
-    _level.blocks.forEach(function (b) {
-      const cfg = BLOCK_T[b.type] || BLOCK_T.wood;
-      const body = M.Bodies.rectangle(b.x, b.y, b.w, b.h, {
+    (_level.structure || _level.blocks || []).forEach(function (b) {
+      const typeName = BLOCK_TYPE_MAP[b.type] || b.type || 'wood';
+      const cfg = BLOCK_T[typeName] || BLOCK_T.wood;
+      const bw = b.w || 40, bh = b.h || 40;
+      const body = M.Bodies.rectangle(b.x, b.y, bw, bh, {
         density: cfg.density,
         restitution: cfg.rest,
         friction: 0.5,
         frictionStatic: 0.6,
         label: 'block',
       });
-      const obj = { body, kind: 'block', type: b.type, w: b.w, h: b.h,
+      const obj = { body, kind: 'block', type: typeName, w: bw, h: bh,
                     hp: cfg.hp, maxHp: cfg.hp, pts: cfg.pts, destroyed: false };
       body._gobj = obj;
       _physObjs.push(obj);
@@ -489,10 +497,8 @@
       // Level complete
       const dinoBonus = _dinoQueue.length * 1000;
       _score += dinoBonus;
-      const dinos  = _level.dinos.length;
-      const used   = dinos - _dinoQueue.length;
-      const par    = _level.par;
-      const stars  = used <= par - 2 ? 3 : used <= par ? 2 : 1;
+      const par    = _level.par || 3000;
+      const stars  = _score >= par ? 3 : _score >= par * 0.65 ? 2 : 1;
       G.setState({ lastScore: _score, lastStars: stars });
       window.Storage.saveLevel(G.state.currentLevel, stars, _score);
       // Update max level
@@ -526,8 +532,9 @@
     if (!_level) { G.showScreen('worldmap'); return; }
 
     _physObjs        = [];
-    _dinoQueue       = _level.dinos.slice(1); // first one is ready
-    _curDinoId       = _level.dinos[0];
+    const _levelDinos = (_level.dinoIds || _level.dinos || []);
+    _dinoQueue       = _levelDinos.slice(1); // first one is ready
+    _curDinoId       = _levelDinos[0];
     _score           = 0;
     _enemiesDefeated = 0;
     _blocksDestroyed = 0;

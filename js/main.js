@@ -600,9 +600,9 @@
     // to at least render placeholder icons for remaining dinos via the level data
     var level = window.LEVELS &&
       window.LEVELS[Math.max(0, (G.state.currentLevel || 1) - 1)];
-    if (!level || !level.dinos) return;
+    if (!level || (!level.dinoIds && !level.dinos)) return;
 
-    var dinos  = level.dinos || [];
+    var dinos  = level.dinoIds || level.dinos || [];
     var wanted = dinos.length;
     var current = container.children.length;
     if (current === wanted) return; // no change — skip DOM thrash
