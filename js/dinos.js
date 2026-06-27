@@ -242,7 +242,7 @@ window.DINO_ROSTER = [
       /* scherpe klauwen -->  */
       '<line x1="58" y1="130" x2="48" y2="148" stroke="var(--dark)" stroke-width="3" stroke-linecap="round" />',
       '<line x1="62" y1="128" x2="50" y2="145" stroke="var(--dark)" stroke-width="3" stroke-linecap="round" />',
-      /* snelheidsstrepen -->
+      /* snelheidsstrepen */
       '<path d="M30,100 Q50,96 44,110" stroke="var(--belly)" stroke-width="2" fill="none" opacity="0.7" />',
       '<path d="M22,112 Q42,108 36,122" stroke="var(--belly)" stroke-width="2" fill="none" opacity="0.7" />',
     ],

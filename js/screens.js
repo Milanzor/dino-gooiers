@@ -1,724 +1,1026 @@
 /**
- * screens.js — Dino Gooiers non-gameplay screens
+ * screens.js — Dino Gooiers
  *
- * Registers: splash, menu, worldmap, levelcomplete, gameover, bossintro
- * All rendering is done on the canvas in design-space (0-1170 × 0-540).
- * Button hit-testing uses 'dragEnd' events from Game.
+ * HTML screen implementations for all non-gameplay screens.
+ * Injects markup into #screen-container and manages tap/click handlers.
+ *
+ * Exposes:  window.Screens
+ * Also registers minimal canvas hooks with Game.registerScreen() so the
+ * engine's fallback placeholder text never shows through.
+ *
+ * Dependencies (load order in index.html): engine.js → dinos.js → levels.js → screens.js
  */
 
 (function (G) {
   'use strict';
 
-  const DW = G.DESIGN_WIDTH;   // 1170
-  const DH = G.DESIGN_HEIGHT;  // 540
+  // ── One-time CSS injection ──────────────────────────────────────────────────
 
-  // ── Shared drawing utilities ─────────────────────────────────────────────
+  (function () {
+    if (document.getElementById('sc-styles')) return;
+    var el = document.createElement('style');
+    el.id = 'sc-styles';
+    el.textContent =
+      '@keyframes sc-bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-20px)}}' +
+      '@keyframes sc-blink{0%,45%{opacity:1}50%,95%{opacity:0}100%{opacity:1}}' +
+      '@keyframes sc-pop{0%{transform:scale(0) rotate(-200deg);opacity:0}' +
+        '65%{transform:scale(1.3) rotate(12deg)}100%{transform:scale(1) rotate(0deg);opacity:1}}' +
+      '@keyframes sc-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}' +
+      '@keyframes sc-shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-10px)}' +
+        '40%{transform:translateX(10px)}60%{transform:translateX(-7px)}80%{transform:translateX(7px)}}' +
+      '@keyframes sc-flash{0%,100%{opacity:0}50%{opacity:1}}' +
+      '@keyframes sc-hazard{0%{background-position:0 0}100%{background-position:56px 0}}' +
+      '@keyframes sc-pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.06);opacity:.85}}' +
+      '@keyframes sc-coin{0%{transform:translate(0,0) scale(1);opacity:1}' +
+        '100%{transform:translate(var(--cdx),var(--cdy)) scale(0.2);opacity:0}}' +
+      '@keyframes sc-smoke{0%{transform:translateY(0) scale(.8);opacity:.55}' +
+        '100%{transform:translateY(-44px) scale(1.5);opacity:0}}' +
+      '@keyframes sc-lightning{0%,80%,100%{opacity:0}82%,96%{opacity:.9}90%{opacity:.2}}' +
+      '@keyframes sc-hpslam{from{width:0}to{width:100%}}' +
+      '@keyframes sc-fadeup{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}' +
+      '@keyframes sc-spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}' +
+      '.sc-full{position:absolute;inset:0;overflow:hidden}' +
+      '.sc-btn{display:inline-block;border:none;cursor:pointer;font-family:"Baloo 2",cursive;' +
+        'font-weight:700;border-radius:14px;text-align:center;letter-spacing:.03em;' +
+        'transition:transform .12s,filter .12s;user-select:none;-webkit-tap-highlight-color:transparent}' +
+      '.sc-btn:hover{transform:scale(1.05);filter:brightness(1.12)}' +
+      '.sc-btn:active{transform:scale(.96)}' +
+      '.sc-btn-gold{background:linear-gradient(180deg,#ffd23f 0%,#f5a623 100%);color:#1a0e2e;' +
+        'box-shadow:0 4px 0 #8b6000,0 6px 22px rgba(255,180,0,.45);border:2px solid rgba(255,255,255,.35)}' +
+      '.sc-btn-purple{background:linear-gradient(180deg,#5a3a9e 0%,#2d1b5e 100%);color:#fff;' +
+        'box-shadow:0 3px 0 #110828,0 5px 16px rgba(80,30,180,.45);border:1.5px solid rgba(180,140,255,.25)}' +
+      '.sc-btn-red{background:linear-gradient(180deg,#e25050 0%,#991818 100%);color:#fff;' +
+        'box-shadow:0 3px 0 #5a0808,0 5px 14px rgba(200,0,0,.4);border:1.5px solid rgba(255,140,140,.28)}' +
+      '.sc-btn-green{background:linear-gradient(180deg,#56c754 0%,#2e8b2c 100%);color:#fff;' +
+        'box-shadow:0 3px 0 #0a5008,0 5px 14px rgba(0,180,0,.4);border:1.5px solid rgba(140,255,140,.28)}' +
+      '.sc-btn-blue{background:linear-gradient(180deg,#4a90e2 0%,#1a4899 100%);color:#fff;' +
+        'box-shadow:0 3px 0 #0a1860,0 5px 14px rgba(20,60,200,.4);border:1.5px solid rgba(140,180,255,.28)}' +
+      '.sc-star-slot{display:inline-block;font-size:2.8rem;opacity:.2;filter:grayscale(1)}' +
+      '.sc-star-slot.lit{opacity:1;filter:none;animation:sc-pop .45s cubic-bezier(.34,1.56,.64,1) forwards}';
+    document.head.appendChild(el);
+  }());
 
-  function rr(ctx, x, y, w, h, r) {
-    ctx.beginPath();
-    ctx.roundRect(x, y, w, h, r);
+  // ── Container helpers ───────────────────────────────────────────────────────
+
+  var _sc = null;
+
+  function sc() { return _sc || (_sc = document.getElementById('screen-container')); }
+
+  function setHTML(html) {
+    var el = sc();
+    el.innerHTML = html;
+    el.style.display = 'block';
+    el.style.pointerEvents = 'auto';
   }
 
-  function shadow(ctx, color, blur) {
-    ctx.shadowColor = color;
-    ctx.shadowBlur  = blur;
+  function clearScreen() {
+    var el = sc();
+    el.innerHTML = '';
+    el.style.display = 'none';
+    el.style.pointerEvents = 'none';
   }
 
-  function noShadow(ctx) {
-    ctx.shadowColor = 'transparent';
-    ctx.shadowBlur  = 0;
-  }
+  function $(id) { return document.getElementById(id); }
 
-  function drawStar(ctx, cx, cy, outer, inner, points) {
-    ctx.beginPath();
-    for (let i = 0; i < points * 2; i++) {
-      const r   = i % 2 === 0 ? outer : inner;
-      const ang = (Math.PI * i) / points - Math.PI / 2;
-      i === 0 ? ctx.moveTo(cx + r * Math.cos(ang), cy + r * Math.sin(ang))
-              : ctx.lineTo(cx + r * Math.cos(ang), cy + r * Math.sin(ang));
-    }
-    ctx.closePath();
-  }
+  // ── SVG assets ──────────────────────────────────────────────────────────────
 
-  /** Draw pulsating button with rounded corners. */
-  function drawButton(ctx, x, y, w, h, label, hue, t) {
-    const pulse = 1 + Math.sin(t * 3) * 0.025;
-    const pw = w * pulse, ph = h * pulse;
-    const px = x + (w - pw) / 2, py = y + (h - ph) / 2;
-    ctx.save();
-    shadow(ctx, 'rgba(0,0,0,.45)', 14);
-    const bg = ctx.createLinearGradient(px, py, px, py + ph);
-    bg.addColorStop(0, hue.top);
-    bg.addColorStop(1, hue.bot);
-    ctx.fillStyle = bg;
-    rr(ctx, px, py, pw, ph, 14);
-    ctx.fill();
-    noShadow(ctx);
-    // border
-    ctx.strokeStyle = hue.border;
-    ctx.lineWidth = 2.5;
-    rr(ctx, px + 1, py + 1, pw - 2, ph - 2, 13);
-    ctx.stroke();
-    // text
-    shadow(ctx, 'rgba(0,0,0,.5)', 6);
-    ctx.fillStyle = '#fff';
-    ctx.font = `800 ${Math.round(ph * 0.38)}px 'Baloo 2', cursive`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(label, px + pw / 2, py + ph / 2 + 2);
-    noShadow(ctx);
-    ctx.restore();
-  }
+  var SVG_STEGO = [
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 170" width="220" height="170" aria-hidden="true">',
+    '<polygon points="60,60 68,34 76,60" fill="#1b5e20"/>',
+    '<polygon points="76,54 87,26 98,54" fill="#1b5e20"/>',
+    '<polygon points="97,58 109,28 121,58" fill="#1b5e20"/>',
+    '<polygon points="120,62 130,36 140,62" fill="#1b5e20"/>',
+    '<ellipse cx="93" cy="102" rx="54" ry="40" fill="#4caf50"/>',
+    '<ellipse cx="93" cy="116" rx="40" ry="26" fill="#c8e6c9"/>',
+    '<ellipse cx="66" cy="134" rx="13" ry="19" fill="#388e3c"/>',
+    '<ellipse cx="50" cy="150" rx="18" ry="8" fill="#2e7d32"/>',
+    '<ellipse cx="118" cy="132" rx="12" ry="17" fill="#388e3c"/>',
+    '<ellipse cx="133" cy="148" rx="16" ry="7" fill="#2e7d32"/>',
+    '<ellipse cx="146" cy="84" rx="20" ry="27" fill="#4caf50"/>',
+    '<ellipse cx="162" cy="62" rx="25" ry="21" fill="#4caf50"/>',
+    '<circle cx="171" cy="54" r="7" fill="#c8e6c9"/>',
+    '<circle cx="173" cy="54" r="4" fill="#1a2e1a"/>',
+    '<circle cx="183" cy="65" r="3" fill="#2e7d32"/>',
+    '<path d="M166 72 Q177 79 188 72" stroke="#2e7d32" stroke-width="2" fill="none"/>',
+    '<path d="M37 106 Q8 92 5 112 Q9 130 34 120" fill="#4caf50"/>',
+    '</svg>',
+  ].join('');
 
-  const BTN_GREEN  = { top: '#56c754', bot: '#2e8b2c', border: '#9ef59c' };
-  const BTN_ORANGE = { top: '#ff9a2a', bot: '#c05800', border: '#ffd090' };
-  const BTN_BLUE   = { top: '#4a90e2', bot: '#1a4899', border: '#90c8ff' };
-  const BTN_RED    = { top: '#e25050', bot: '#991818', border: '#ff9090' };
-  const BTN_GOLD   = { top: '#f5c842', bot: '#c47a00', border: '#ffe090' };
+  // Construction crane silhouette
+  var SVG_CRANE = [
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 90 200" width="90" height="200" aria-hidden="true" style="display:block">',
+    // Tower
+    '<rect x="36" y="80" width="18" height="118" fill="#37474f"/>',
+    '<line x1="36" y1="82" x2="54" y2="122" stroke="#546e7a" stroke-width="1.5"/>',
+    '<line x1="54" y1="82" x2="36" y2="122" stroke="#546e7a" stroke-width="1.5"/>',
+    '<line x1="36" y1="122" x2="54" y2="162" stroke="#546e7a" stroke-width="1.5"/>',
+    '<line x1="54" y1="122" x2="36" y2="162" stroke="#546e7a" stroke-width="1.5"/>',
+    // Jib
+    '<rect x="8" y="66" width="74" height="10" rx="2" fill="#455a64"/>',
+    // Counter-jib
+    '<rect x="2" y="68" width="26" height="6" fill="#546e7a"/>',
+    '<rect x="2" y="62" width="18" height="14" rx="2" fill="#78909c"/>',
+    // Cab
+    '<rect x="32" y="54" width="26" height="18" rx="3" fill="#455a64"/>',
+    '<rect x="37" y="57" width="10" height="9" rx="2" fill="#b0bec5"/>',
+    // Rope + hook
+    '<line x1="80" y1="76" x2="80" y2="140" stroke="#90a4ae" stroke-width="1.5"/>',
+    '<path d="M77 140 Q80 150 83 140" stroke="#90a4ae" stroke-width="1.5" fill="none"/>',
+    // Warning stripe on jib tip
+    '<rect x="74" y="66" width="8" height="10" fill="#ffd23f" opacity=".7"/>',
+    '</svg>',
+  ].join('');
 
-  /** Sky gradient for current world */
-  function drawSky(ctx, world, t) {
-    let colors;
-    if (world === 3) {
-      colors = ['#0a0612', '#180c2a', '#2a1040'];
-    } else if (world === 2) {
-      colors = ['#0d1b38', '#23366a', '#5c3e88'];
-    } else {
-      colors = ['#e05020', '#f08030', '#ffc060'];
-    }
-    const g = ctx.createLinearGradient(0, 0, 0, DH * 0.72);
-    g.addColorStop(0, colors[0]);
-    g.addColorStop(0.5, colors[1]);
-    g.addColorStop(1, colors[2]);
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, DW, DH * 0.72);
-  }
+  // Sad T-Rex for game over
+  var SVG_SAD_REX = [
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 230" width="180" height="207" aria-hidden="true">',
+    '<rect x="72" y="160" width="18" height="42" rx="6" fill="#b71c1c"/>',
+    '<rect x="98" y="162" width="18" height="40" rx="6" fill="#b71c1c"/>',
+    '<ellipse cx="81" cy="200" rx="17" ry="8" fill="#b71c1c"/>',
+    '<ellipse cx="107" cy="200" rx="17" ry="8" fill="#b71c1c"/>',
+    '<ellipse cx="103" cy="132" rx="42" ry="37" fill="#e53935" transform="rotate(8,103,132)"/>',
+    '<ellipse cx="110" cy="144" rx="28" ry="23" fill="#ffcdd2" transform="rotate(8,110,144)"/>',
+    '<ellipse cx="64" cy="138" rx="9" ry="20" fill="#e53935" transform="rotate(40,64,138)"/>',
+    '<ellipse cx="146" cy="142" rx="9" ry="20" fill="#e53935" transform="rotate(-35,146,142)"/>',
+    '<ellipse cx="110" cy="96" rx="18" ry="24" fill="#e53935" transform="rotate(6,110,96)"/>',
+    '<ellipse cx="122" cy="70" rx="31" ry="25" fill="#e53935" transform="rotate(14,122,70)"/>',
+    '<circle cx="137" cy="60" r="9" fill="#ffcdd2"/>',
+    '<circle cx="139" cy="62" r="5" fill="#1a0a0a"/>',
+    '<path d="M129 52 Q139 47 146 53" stroke="#b71c1c" stroke-width="3" fill="none" stroke-linecap="round"/>',
+    '<path d="M124 83 Q137 77 148 83" stroke="#b71c1c" stroke-width="2.5" fill="none" stroke-linecap="round"/>',
+    '<ellipse cx="131" cy="68" rx="3" ry="4.5" fill="#64b5f6" opacity=".85"/>',
+    '<path d="M60 140 Q30 130 26 152 Q32 174 58 162" fill="#e53935"/>',
+    '</svg>',
+  ].join('');
 
-  /** Draw animated stars (world 2 & 3) */
-  function drawStars(ctx, t, count) {
-    count = count || 80;
-    ctx.fillStyle = 'rgba(255,255,255,0.9)';
-    for (let i = 0; i < count; i++) {
-      const x = ((i * 1317 + 47) % 1100) + 35;
-      const y = ((i * 787 + 23) % 300) + 10;
-      const twinkle = 0.4 + 0.6 * Math.abs(Math.sin(t * 1.5 + i * 0.7));
-      const r = (1 + (i % 3) * 0.7) * twinkle;
-      ctx.globalAlpha = twinkle * 0.9;
-      ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.globalAlpha = 1;
-  }
+  // ── World / level data ──────────────────────────────────────────────────────
 
-  /** Draw distant mountain silhouettes */
-  function drawMountains(ctx, world) {
-    const col  = world === 1 ? '#5a3010'
-               : world === 2 ? '#1a1a3a' : '#0a0a1a';
-    const col2 = world === 1 ? '#7a5030'
-               : world === 2 ? '#252550' : '#101028';
-    // Back mountains
-    ctx.fillStyle = col;
-    ctx.beginPath();
-    ctx.moveTo(0, DH * 0.72);
-    const pts = [50,0.52, 150,0.38, 250,0.55, 380,0.3, 500,0.48, 620,0.25,
-                 750,0.42, 870,0.28, 1000,0.44, 1100,0.32, 1170,0.46];
-    for (let i = 0; i < pts.length; i += 2) {
-      ctx.lineTo(pts[i], DH * pts[i + 1]);
-    }
-    ctx.lineTo(DW, DH * 0.72);
-    ctx.closePath();
-    ctx.fill();
-    // Front mountains
-    ctx.fillStyle = col2;
-    ctx.beginPath();
-    ctx.moveTo(0, DH * 0.72);
-    const pts2 = [80,0.64, 200,0.54, 330,0.68, 450,0.48, 570,0.62, 680,0.45,
-                  800,0.60, 920,0.50, 1050,0.65, 1170,0.55];
-    for (let i = 0; i < pts2.length; i += 2) {
-      ctx.lineTo(pts2[i], DH * pts2[i + 1]);
-    }
-    ctx.lineTo(DW, DH * 0.72);
-    ctx.closePath();
-    ctx.fill();
-  }
-
-  /** Draw ground band */
-  function drawGround(ctx, world) {
-    const gy = DH * 0.72;
-    const gh = DH - gy;
-    const g = ctx.createLinearGradient(0, gy, 0, DH);
-    if (world === 1) {
-      g.addColorStop(0, '#6a4020'); g.addColorStop(1, '#3a2010');
-    } else if (world === 2) {
-      g.addColorStop(0, '#505060'); g.addColorStop(1, '#282830');
-    } else {
-      g.addColorStop(0, '#303040'); g.addColorStop(1, '#101018');
-    }
-    ctx.fillStyle = g;
-    ctx.fillRect(0, gy, DW, gh);
-    // Ground stripe (hazard) for world 3
-    if (world === 3) {
-      const stripeH = 16;
-      for (let x = 0; x < DW; x += 36) {
-        ctx.fillStyle = x % 72 < 36 ? 'rgba(255,180,0,.15)' : 'transparent';
-        ctx.fillRect(x, DH - stripeH, 36, stripeH);
-      }
-    }
-  }
-
-  /** Draw animated clouds (world 1) */
-  function drawClouds(ctx, t) {
-    ctx.fillStyle = 'rgba(255,220,180,.35)';
-    [[200, 80, 100, 36], [450, 60, 130, 28], [720, 95, 90, 32],
-     [950, 70, 110, 34], [350, 120, 70, 22]].forEach(([bx, y, w, h], i) => {
-      const x = ((bx + t * 18 * (1 + i * 0.3)) % (DW + 200)) - 100;
-      ctx.beginPath();
-      ctx.ellipse(x, y, w, h, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.ellipse(x + w * 0.4, y - h * 0.35, w * 0.55, h * 0.65, 0, 0, Math.PI * 2);
-      ctx.fill();
-    });
-  }
-
-  /** Full scene background (sky + features + ground) */
-  function drawBackground(ctx, world, t) {
-    drawSky(ctx, world, t);
-    if (world > 1) drawStars(ctx, t, world === 3 ? 120 : 70);
-    if (world === 1) drawClouds(ctx, t);
-    drawMountains(ctx, world);
-    drawGround(ctx, world);
-  }
-
-  /** Draw the logo text (DINO GOOIERS / Bouw ze plat!) */
-  function drawLogo(ctx, cx, cy, scale, t) {
-    scale = scale || 1;
-    ctx.save();
-    ctx.textAlign = 'center';
-    // Shadow layer
-    ctx.fillStyle = 'rgba(0,0,0,.35)';
-    ctx.font = `${Math.round(scale * 88)}px 'Bungee', cursive`;
-    ctx.fillText('DINO GOOIERS', cx + 3, cy + 7);
-    // Main text
-    shadow(ctx, 'rgba(245,180,0,.7)', 28 * scale);
-    ctx.fillStyle = '#f5c842';
-    ctx.font = `${Math.round(scale * 88)}px 'Bungee', cursive`;
-    ctx.fillText('DINO GOOIERS', cx, cy);
-    // Subtitle
-    noShadow(ctx);
-    shadow(ctx, 'rgba(180,80,0,.6)', 14 * scale);
-    ctx.fillStyle = '#ff8c2a';
-    ctx.font = `800 ${Math.round(scale * 32)}px 'Baloo 2', cursive`;
-    ctx.letterSpacing = '3px';
-    ctx.fillText('BOUW ZE PLAT!', cx, cy + scale * 52);
-    ctx.letterSpacing = '0px';
-    noShadow(ctx);
-    ctx.restore();
-  }
-
-  // ── Button tap system ────────────────────────────────────────────────────
-
-  let _activeButtons = [];
-  let _tapOffFn = null;
-
-  function registerButtons(buttons) {
-    clearButtons();
-    _activeButtons = buttons;
-    _tapOffFn = G.on('dragEnd', function (e) {
-      if (e.magnitude > 18) return; // not a tap
-      const { x, y } = e.position;
-      _activeButtons.forEach(function (b) {
-        if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) {
-          b.onClick();
-        }
-      });
-    });
-  }
-
-  function clearButtons() {
-    _activeButtons = [];
-    if (_tapOffFn) { _tapOffFn(); _tapOffFn = null; }
-  }
-
-  // ── SPLASH SCREEN ────────────────────────────────────────────────────────
-
-  let _splashT = 0;
-  let _splashDone = false;
-
-  G.registerScreen('splash', {
-    enter: function () {
-      _splashT = 0;
-      _splashDone = false;
-    },
-    exit:   function () { clearButtons(); },
-    update: function (dt) {
-      _splashT += dt;
-      if (_splashT > 0.5 && !_splashDone && window._assetsReady) {
-        _splashDone = true;
-        G.showScreen('menu');
-      }
-    },
-    render: function (ctx) {
-      // Background
-      drawBackground(ctx, 1, _splashT);
-      // Logo
-      const pulse = 1 + Math.sin(_splashT * 2.2) * 0.018;
-      ctx.save();
-      ctx.translate(DW / 2, DH * 0.38);
-      ctx.scale(pulse, pulse);
-      drawLogo(ctx, 0, 0, 1, _splashT);
-      ctx.restore();
-      // Loading bar
-      const progress = window._loadProgress || 0;
-      const bw = 360, bh = 10;
-      const bx = (DW - bw) / 2, by = DH * 0.72;
-      ctx.fillStyle = 'rgba(255,255,255,.1)';
-      rr(ctx, bx, by, bw, bh, 5);
-      ctx.fill();
-      const grad = ctx.createLinearGradient(bx, 0, bx + bw, 0);
-      grad.addColorStop(0, '#f5c842');
-      grad.addColorStop(1, '#ff8c2a');
-      ctx.fillStyle = grad;
-      rr(ctx, bx, by, bw * progress, bh, 5);
-      ctx.fill();
-    },
-  });
-
-  // ── MENU SCREEN ──────────────────────────────────────────────────────────
-
-  let _menuT = 0;
-
-  G.registerScreen('menu', {
-    enter: function () {
-      _menuT = 0;
-      registerButtons([
-        { x: DW/2 - 140, y: DH * 0.62, w: 280, h: 72,
-          onClick: function () { G.showScreen('worldmap'); } },
-      ]);
-    },
-    exit:   function () { clearButtons(); _menuT = 0; },
-    update: function (dt) { _menuT += dt; },
-    render: function (ctx) {
-      drawBackground(ctx, G.state.currentWorld || 1, _menuT);
-
-      // Glow halo behind logo
-      shadow(ctx, 'rgba(245,180,0,.3)', 60);
-      ctx.fillStyle = 'transparent';
-      ctx.beginPath();
-      ctx.arc(DW / 2, DH * 0.32, 160, 0, Math.PI * 2);
-      ctx.fill();
-      noShadow(ctx);
-
-      // Logo
-      drawLogo(ctx, DW / 2, DH * 0.30, 1, _menuT);
-
-      // High score
-      const best = window.Storage ? Storage.getBestTotal() : 0;
-      if (best > 0) {
-        ctx.textAlign = 'center';
-        ctx.fillStyle = 'rgba(255,230,140,.75)';
-        ctx.font = "600 20px 'Nunito', sans-serif";
-        ctx.fillText('Beste: ' + best.toLocaleString('nl'), DW / 2, DH * 0.56);
-      }
-
-      // Play button
-      drawButton(ctx, DW/2 - 140, DH * 0.62, 280, 72, '▶  SPELEN', BTN_GREEN, _menuT);
-    },
-  });
-
-  // ── WORLD MAP SCREEN ─────────────────────────────────────────────────────
-
-  let _mapT = 0;
-  let _mapScroll = 0;
-
-  const WORLD_COLORS = [
-    { bg: '#2a5020', node: '#56c754', boss: '#f5c842', name: 'Jungle Ruïnes' },
-    { bg: '#1a2850', node: '#4a90e2', boss: '#f5c842', name: 'Stenen Stad'   },
-    { bg: '#201828', node: '#c050d0', boss: '#f5c842', name: 'Stalen Burcht' },
+  var WORLDS = [
+    { num: 1, name: 'Jungle Ruïnes', bg: 'linear-gradient(160deg,#0d2010 0%,#1a3a18 50%,#2a5020 100%)',
+      accent: '#56c754', nodeBg: '#2e7d32', bossBg: '#b71c1c', textColor: '#a5d6a7' },
+    { num: 2, name: 'Stenen Stad',   bg: 'linear-gradient(160deg,#060e20 0%,#0d1b38 50%,#1a2850 100%)',
+      accent: '#4a90e2', nodeBg: '#1565c0', bossBg: '#b71c1c', textColor: '#90caf9' },
+    { num: 3, name: 'Stalen Burcht', bg: 'linear-gradient(160deg,#060410 0%,#100818 50%,#201828 100%)',
+      accent: '#ba68c8', nodeBg: '#7b1fa2', bossBg: '#b71c1c', textColor: '#ce93d8' },
   ];
 
-  G.registerScreen('worldmap', {
-    enter: function () {
-      _mapT = 0;
-      registerButtons([
-        // Back button
-        { x: 20, y: 14, w: 110, h: 44,
-          onClick: function () { G.showScreen('menu'); } },
-      ]);
-      // Register level node buttons dynamically (up to 30)
-      const unlocked = G.state.maxLevel || 1;
-      for (let i = 0; i < 30; i++) {
-        const pos = _levelNodePos(i);
-        const btn = {
-          x: pos.x - 30, y: pos.y - 30, w: 60, h: 60,
-          levelIdx: i,
-          onClick: (function (li) {
-            return function () {
-              if (li + 1 > (G.state.maxLevel || 1)) return;
-              G.setState({ currentLevel: li + 1 });
-              G.showScreen('gameplay');
-            };
-          }(i)),
-        };
-        _activeButtons.push(btn);
+  var DINO_TIPS = [
+    'Gooi Rocky recht op een houten toren voor maximale schade!',
+    'Gebruik Dash om meerdere vijanden tegelijk neer te halen.',
+    'Sky duikt van bovenaf — perfect voor vijanden op hoge platforms.',
+    'TNT-blokken activeren bij de kleinste aanraking — gebruik dit slim!',
+    'Glazen blokken breken makkelijk maar kunnen vijanden beschermen.',
+    'Stalen blokken zijn het hardst — laat ze omvallen in plaats van ze te rammen.',
+    'Kijk goed naar de constructie vóór je gooit. Soms is één dino genoeg.',
+    'Chomp bijt dwars door staal — zet hem in bij de moeilijkste torens.',
+    'Bubba explodeert bij inslag — gooi hem op de basis voor kettingreacties!',
+    'Vijanden die onder vallende blokken worden geraakt leveren bonuspunten op.',
+    'Trix boort met drie hoorns — ideaal voor horizontale constructies.',
+    'Stomp zijn schokgolf raakt alles op de grond. Perfect voor bruggen!',
+    'Een bonus-dino die overblijft levert extra punten op. Zuinig schieten loont!',
+    'Brons verbrijzelt met zijn gewicht alles onder hem bij de landing.',
+  ];
+
+  // ── Loading screen state ────────────────────────────────────────────────────
+
+  var _loadingVisible = false;
+  var _tipTimer = null;
+  var _tipIdx = 0;
+
+  function _nextTip() {
+    _tipIdx = (_tipIdx + 1) % DINO_TIPS.length;
+    var el = $('sc-tip-text');
+    if (!el) return;
+    el.style.opacity = '0';
+    setTimeout(function () {
+      if ($('sc-tip-text')) {
+        $('sc-tip-text').textContent = DINO_TIPS[_tipIdx];
+        $('sc-tip-text').style.opacity = '1';
       }
-    },
-    exit:   function () { clearButtons(); },
-    update: function (dt) { _mapT += dt; },
-    render: function (ctx) {
-      // Background: world-coloured gradient
-      const worldIdx = Math.floor((G.state.currentLevel - 1) / 10);
-      const wc = WORLD_COLORS[Math.min(worldIdx, 2)];
-      const g = ctx.createLinearGradient(0, 0, 0, DH);
-      g.addColorStop(0, '#0a0612'); g.addColorStop(1, wc.bg);
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, DW, DH);
-
-      // Draw path connecting nodes
-      ctx.strokeStyle = 'rgba(255,255,255,.18)';
-      ctx.lineWidth = 6;
-      ctx.setLineDash([14, 10]);
-      ctx.beginPath();
-      for (let i = 0; i < 30; i++) {
-        const p = _levelNodePos(i);
-        i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y);
-      }
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      const unlocked = G.state.maxLevel || 1;
-      const stars    = G.state.stars    || [];
-
-      for (let i = 0; i < 30; i++) {
-        const p    = _levelNodePos(i);
-        const lvl  = i + 1;
-        const st   = stars[i] || 0;
-        const isBoss = (lvl % 10 === 0);
-        const isLocked = lvl > unlocked;
-        const isActive = lvl === G.state.currentLevel;
-        const worldFor = Math.floor(i / 10);
-        const color  = WORLD_COLORS[worldFor];
-
-        // Node glow for active
-        if (isActive) {
-          const pulse = 1 + Math.sin(_mapT * 3) * 0.12;
-          shadow(ctx, color.node, 22 * pulse);
-        }
-
-        // Node circle
-        const r = isBoss ? 32 : 24;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-        ctx.fillStyle = isLocked ? '#1a1a2a'
-                      : isBoss   ? color.boss : color.node;
-        ctx.fill();
-
-        // Border
-        ctx.strokeStyle = isActive ? '#fff' : 'rgba(255,255,255,.35)';
-        ctx.lineWidth = isActive ? 3.5 : 1.5;
-        ctx.stroke();
-        noShadow(ctx);
-
-        // Level number or lock
-        ctx.fillStyle = isLocked ? 'rgba(255,255,255,.25)' : '#fff';
-        ctx.font = `800 ${isBoss ? 14 : 13}px 'Nunito', sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(isLocked ? '🔒' : (isBoss ? '👑' : lvl), p.x, p.y);
-
-        // Stars below node
-        if (st > 0 && !isLocked) {
-          for (let s = 0; s < 3; s++) {
-            const sx = p.x - 12 + s * 12;
-            const sy = p.y + r + 10;
-            drawStar(ctx, sx, sy, 6, 3, 5);
-            ctx.fillStyle = s < st ? '#f5c842' : 'rgba(255,255,255,.2)';
-            ctx.fill();
-          }
-        }
-      }
-
-      // World labels
-      WORLD_COLORS.forEach(function (wc2, wi) {
-        const p = _levelNodePos(wi * 10);
-        ctx.fillStyle = 'rgba(255,255,255,.6)';
-        ctx.font = "700 14px 'Nunito', sans-serif";
-        ctx.textAlign = 'center';
-        ctx.fillText('Wereld ' + (wi + 1) + ' — ' + wc2.name, p.x + 60, p.y - 44);
-      });
-
-      // Back button
-      drawButton(ctx, 20, 14, 110, 44, '← Terug', BTN_BLUE, _mapT);
-
-      // Title
-      ctx.fillStyle = '#f5c842';
-      ctx.font = "800 26px 'Baloo 2', cursive";
-      ctx.textAlign = 'center';
-      ctx.fillText('Wereldkaart', DW / 2, 34);
-    },
-  });
-
-  /** Return canvas position for level index i (0-based) in a winding path. */
-  function _levelNodePos(i) {
-    const world = Math.floor(i / 10);
-    const li    = i % 10; // level within world 0-9
-    // Serpentine: odd rows go right-to-left
-    const row = Math.floor(li / 5);
-    const col = li % 5;
-    const effectiveCol = row % 2 === 0 ? col : 4 - col;
-    const worldOffX = world * 380;
-    const x = 80 + worldOffX + effectiveCol * 68;
-    const y = row === 0 ? 200 : 370;
-    return { x: Math.min(x, DW - 60), y };
+    }, 350);
   }
 
-  // ── LEVEL COMPLETE SCREEN ────────────────────────────────────────────────
+  // ── Stars SVG helper (small, for node decoration) ──────────────────────────
 
-  let _lcT = 0;
-  let _lcStars = 0;
-  let _lcScore = 0;
+  function starsHTML(count, size) {
+    size = size || 14;
+    var h = '';
+    for (var i = 0; i < 3; i++) {
+      var color = i < count ? '#ffd23f' : 'rgba(255,255,255,.18)';
+      var shadow = i < count ? 'drop-shadow(0 0 3px rgba(255,200,0,.8))' : 'none';
+      h += '<svg xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + size + '" viewBox="0 0 20 20" style="filter:' + shadow + ';display:inline-block;vertical-align:middle">' +
+        '<polygon points="10,2 12.4,7.8 18.5,8.2 14,12.2 15.4,18.2 10,15 4.6,18.2 6,12.2 1.5,8.2 7.6,7.8" fill="' + color + '"/>' +
+        '</svg>';
+    }
+    return h;
+  }
 
-  G.registerScreen('levelcomplete', {
-    enter: function () {
-      _lcT = 0;
-      _lcStars = G.state.lastStars || 0;
-      _lcScore = G.state.lastScore || 0;
-      const isLast = G.state.currentLevel >= 30;
-      registerButtons([
-        { x: DW/2 - 270, y: DH * 0.72, w: 230, h: 68,
-          onClick: function () {
-            G.setState({ currentLevel: G.state.currentLevel });
-            G.showScreen('gameplay');
-          }},
-        { x: DW/2 + 40, y: DH * 0.72, w: 230, h: 68,
-          onClick: function () {
-            if (!isLast) {
-              G.setState({ currentLevel: G.state.currentLevel + 1 });
-              G.showScreen('gameplay');
-            } else {
-              G.showScreen('worldmap');
-            }
-          }},
-      ]);
-    },
-    exit:   function () { clearButtons(); },
-    update: function (dt) { _lcT += dt; },
-    render: function (ctx) {
-      // Dim overlay
-      ctx.fillStyle = 'rgba(10,6,18,.82)';
-      ctx.fillRect(0, 0, DW, DH);
+  // ── SPLASH SCREEN ───────────────────────────────────────────────────────────
 
-      // Panel
-      const pw = 640, ph = 480;
-      const px = (DW - pw) / 2, py = (DH - ph) / 2;
-      const pg = ctx.createLinearGradient(px, py, px, py + ph);
-      pg.addColorStop(0, '#1e1040');
-      pg.addColorStop(1, '#0a0820');
-      shadow(ctx, 'rgba(80,40,160,.6)', 40);
-      ctx.fillStyle = pg;
-      rr(ctx, px, py, pw, ph, 24);
-      ctx.fill();
-      noShadow(ctx);
-      ctx.strokeStyle = 'rgba(180,130,255,.3)';
-      ctx.lineWidth = 2;
-      rr(ctx, px + 1, py + 1, pw - 2, ph - 2, 23);
-      ctx.stroke();
+  function showSplash() {
+    G.showScreen('splash');
 
-      // Title
-      shadow(ctx, 'rgba(100,255,80,.5)', 20);
-      ctx.fillStyle = '#6eff50';
-      ctx.font = "800 46px 'Bungee', cursive";
-      ctx.textAlign = 'center';
-      ctx.fillText('NIVEAU KLAAR!', DW / 2, py + 68);
-      noShadow(ctx);
+    // Generate twinkling star dots
+    var stars = '';
+    for (var i = 0; i < 60; i++) {
+      var sx = Math.round((i * 1317 + 47) % 95);
+      var sy = Math.round((i * 787 + 23) % 60);
+      var sr = (0.8 + (i % 3) * 0.6).toFixed(1);
+      var sd = (i * 0.37 % 2.5).toFixed(2);
+      stars += '<div style="position:absolute;left:' + sx + '%;top:' + sy + '%;width:' + sr +
+        'px;height:' + sr + 'px;border-radius:50%;background:#fff;animation:sc-flash ' +
+        (1.5 + i % 2) + 's ' + sd + 's ease-in-out infinite;opacity:' + (0.3 + (i % 4) * 0.15) + '"></div>';
+    }
 
-      // Stars
-      const starReveal = Math.min(_lcT / 0.8, 1); // all stars in 0.8 s
-      for (let s = 0; s < 3; s++) {
-        const shown = s < _lcStars && starReveal > s / 3;
-        const scale = shown ? Math.min((_lcT - s * 0.25) / 0.3, 1) : 0.35;
-        const sx = DW / 2 + (s - 1) * 110;
-        const sy = py + 170;
-        ctx.save();
-        ctx.translate(sx, sy);
-        ctx.scale(scale, scale);
-        drawStar(ctx, 0, 0, 48, 22, 5);
-        ctx.fillStyle = shown ? '#f5c842' : 'rgba(255,255,255,.18)';
-        shadow(ctx, shown ? 'rgba(245,200,0,.7)' : 'transparent', 18);
-        ctx.fill();
-        noShadow(ctx);
-        ctx.strokeStyle = shown ? '#c47a00' : 'rgba(255,255,255,.1)';
-        ctx.lineWidth = 3;
-        ctx.stroke();
-        ctx.restore();
-      }
+    setHTML(
+      '<div class="sc-full" id="sc-splash" style="background:linear-gradient(160deg,#1a0e2e 0%,#2d1b4e 55%,#1a0e2e 100%);' +
+        'display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;color:#fff;">' +
 
-      // Score
-      ctx.fillStyle = 'rgba(255,255,255,.85)';
-      ctx.font = "700 26px 'Nunito', sans-serif";
-      ctx.textAlign = 'center';
-      ctx.fillText('Score: ' + _lcScore.toLocaleString('nl'), DW / 2, py + 270);
+        // Stars background
+        '<div style="position:absolute;inset:0;overflow:hidden">' + stars + '</div>' +
 
-      // Level name
-      const lv = window.LEVELS[G.state.currentLevel - 1];
-      ctx.fillStyle = 'rgba(200,180,255,.65)';
-      ctx.font = "600 18px 'Nunito', sans-serif";
-      ctx.fillText('Niveau ' + G.state.currentLevel + ' — ' + (lv ? lv.name : ''), DW / 2, py + 302);
+        // Crane silhouette — bottom-right corner
+        '<div style="position:absolute;bottom:0;right:24px;opacity:.55">' + SVG_CRANE + '</div>' +
 
-      // Buttons
-      drawButton(ctx, DW/2 - 270, DH * 0.72, 230, 68, '↩ Opnieuw', BTN_ORANGE, _lcT);
-      const isLast = G.state.currentLevel >= 30;
-      drawButton(ctx, DW/2 + 40, DH * 0.72, 230, 68,
-        isLast ? '🗺️ Kaart' : 'Volgende ▶', BTN_GREEN, _lcT);
-    },
-  });
+        // Logo block
+        '<div style="position:relative;z-index:1;text-align:center;margin-bottom:10px">' +
+          '<div style="font-family:\'Bungee\',cursive;font-size:clamp(2.8rem,8vw,5.8rem);color:#ffd23f;line-height:1.05;' +
+            'text-shadow:0 0 40px rgba(255,210,63,.75),0 4px 0 #8b6000,0 6px 22px rgba(0,0,0,.8)">' +
+            'DINO<br>GOOIERS</div>' +
+          '<div style="font-family:\'Nunito\',sans-serif;font-size:clamp(.95rem,2.8vw,1.4rem);' +
+            'color:rgba(255,255,255,.65);margin-top:6px;letter-spacing:.06em">Gooi ze omver!</div>' +
+        '</div>' +
 
-  // ── GAME OVER SCREEN ─────────────────────────────────────────────────────
+        // Bouncing stego
+        '<div style="position:relative;z-index:1;animation:sc-bounce 1.6s ease-in-out infinite;margin:6px 0 4px">' +
+          SVG_STEGO +
+        '</div>' +
 
-  let _goT = 0;
+        // Tap prompt
+        '<div style="position:relative;z-index:1;font-family:\'Baloo 2\',cursive;font-size:clamp(.9rem,2.5vw,1.25rem);' +
+          'color:#ffd23f;letter-spacing:.12em;animation:sc-blink 1.4s ease-in-out infinite;margin-top:18px">' +
+          'TIK OM TE SPELEN' +
+        '</div>' +
 
-  G.registerScreen('gameover', {
-    enter: function () {
-      _goT = 0;
-      registerButtons([
-        { x: DW/2 - 150, y: DH * 0.68, w: 300, h: 72,
-          onClick: function () {
-            G.showScreen('gameplay');
-          }},
-        { x: DW/2 - 80, y: DH * 0.82, w: 160, h: 48,
-          onClick: function () { G.showScreen('worldmap'); }},
-      ]);
-    },
-    exit:   function () { clearButtons(); _goT = 0; },
-    update: function (dt) { _goT += dt; },
-    render: function (ctx) {
-      ctx.fillStyle = 'rgba(10,6,18,.88)';
-      ctx.fillRect(0, 0, DW, DH);
+        // Version
+        '<div style="position:absolute;bottom:12px;right:18px;font-family:\'Nunito\',sans-serif;' +
+          'font-size:11px;color:rgba(255,255,255,.28)">v1.0</div>' +
 
-      // Panel
-      const pw = 520, ph = 400;
-      const px = (DW - pw) / 2, py = (DH - ph) / 2 - 20;
-      shadow(ctx, 'rgba(200,40,40,.5)', 40);
-      ctx.fillStyle = '#180810';
-      rr(ctx, px, py, pw, ph, 24);
-      ctx.fill();
-      noShadow(ctx);
-      ctx.strokeStyle = 'rgba(200,60,60,.4)';
-      ctx.lineWidth = 2;
-      rr(ctx, px+1, py+1, pw-2, ph-2, 23);
-      ctx.stroke();
+      '</div>'
+    );
 
-      // Title wobble
-      const shake = Math.sin(_goT * 8) * (Math.max(0, 0.5 - _goT) * 6);
-      ctx.save();
-      ctx.translate(DW/2 + shake, DH * 0.3);
-      shadow(ctx, 'rgba(255,60,60,.7)', 28);
-      ctx.fillStyle = '#ff4040';
-      ctx.font = "800 62px 'Bungee', cursive";
-      ctx.textAlign = 'center';
-      ctx.fillText('GAME OVER', 0, 0);
-      noShadow(ctx);
-      ctx.restore();
+    // Single-tap handler — advance to loading screen
+    $('sc-splash').addEventListener('pointerdown', function handler() {
+      $('sc-splash').removeEventListener('pointerdown', handler);
+      showLoading(0);
+    }, { once: true });
+  }
 
-      ctx.fillStyle = 'rgba(255,180,180,.75)';
-      ctx.font = "700 22px 'Nunito', sans-serif";
-      ctx.textAlign = 'center';
-      ctx.fillText('De Tirannen hebben gewonnen... dit keer.', DW/2, DH * 0.46);
+  // ── LOADING SCREEN ──────────────────────────────────────────────────────────
 
-      const sc = G.state.lastScore || 0;
-      ctx.fillStyle = '#f5c842';
-      ctx.font = "700 26px 'Nunito', sans-serif";
-      ctx.fillText('Score: ' + sc.toLocaleString('nl'), DW/2, DH * 0.54);
+  function showLoading(progress) {
+    progress = Math.max(0, Math.min(100, progress || 0));
 
-      drawButton(ctx, DW/2 - 150, DH * 0.63, 300, 68, '↩ Probeer Opnieuw', BTN_RED, _goT);
-      drawButton(ctx, DW/2 - 80, DH * 0.78, 160, 44, '🗺️ Kaart', BTN_BLUE, _goT);
-    },
-  });
+    if (!_loadingVisible) {
+      _loadingVisible = true;
+      _tipIdx = Math.floor(Math.random() * DINO_TIPS.length);
+      G.showScreen('loading');
 
-  // ── BOSS INTRO SCREEN ────────────────────────────────────────────────────
+      setHTML(
+        '<div class="sc-full" style="background:#1a0e2e;display:flex;flex-direction:column;' +
+          'align-items:center;justify-content:center;color:#fff;gap:22px">' +
 
-  let _bossT = 0;
+          // Logo
+          '<div style="text-align:center">' +
+            '<div style="font-family:\'Bungee\',cursive;font-size:clamp(2rem,6vw,4rem);color:#ffd23f;' +
+              'text-shadow:0 0 28px rgba(255,210,63,.65),0 3px 0 #8b6000;line-height:1.1">DINO GOOIERS</div>' +
+            '<div style="font-family:\'Baloo 2\',cursive;font-size:clamp(.7rem,2vw,.95rem);color:#f5a623;' +
+              'letter-spacing:.12em;margin-top:2px">BOUW ZE PLAT!</div>' +
+          '</div>' +
 
-  G.registerScreen('bossintro', {
-    enter: function () {
-      _bossT = 0;
+          // Progress bar track
+          '<div style="width:min(380px,72vw);background:rgba(255,255,255,.1);border-radius:8px;' +
+            'overflow:hidden;height:18px;border:1px solid rgba(255,255,255,.1)">' +
+            '<div id="sc-load-bar" style="height:100%;width:' + progress + '%;border-radius:8px;' +
+              'background:repeating-linear-gradient(90deg,#ffd23f 0px,#ffd23f 20px,#f5a623 20px,#f5a623 28px,' +
+              '#ffd23f 28px,#ffd23f 48px,#0a0000 48px,#0a0000 56px);' +
+              'background-size:56px 100%;animation:sc-hazard .6s linear infinite;' +
+              'transition:width .3s ease"></div>' +
+          '</div>' +
+
+          // Percentage + label
+          '<div style="display:flex;gap:16px;align-items:center">' +
+            '<div style="font-family:\'Baloo 2\',cursive;font-size:clamp(.8rem,2.2vw,1rem);' +
+              'color:rgba(255,255,255,.45);letter-spacing:.08em;text-transform:uppercase">Laden...</div>' +
+            '<div id="sc-load-pct" style="font-family:\'Bungee\',cursive;font-size:1.1rem;color:#ffd23f">' +
+              Math.round(progress) + '%</div>' +
+          '</div>' +
+
+          // Dino tip
+          '<div style="max-width:min(400px,78vw);text-align:center;border-top:1px solid rgba(255,255,255,.1);' +
+            'padding-top:16px">' +
+            '<div style="font-family:\'Nunito\',sans-serif;font-size:clamp(.65rem,1.8vw,.85rem);' +
+              'color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">' +
+              'Dino Tip</div>' +
+            '<div id="sc-tip-text" style="font-family:\'Nunito\',sans-serif;font-size:clamp(.8rem,2.2vw,1rem);' +
+              'color:rgba(255,220,160,.8);transition:opacity .35s;font-weight:700">' +
+              DINO_TIPS[_tipIdx] + '</div>' +
+          '</div>' +
+
+        '</div>'
+      );
+
+      // Cycle tips every 3 seconds
+      _tipTimer = setInterval(_nextTip, 3000);
+    }
+
+    // Update bar + counter in place
+    var bar = $('sc-load-bar');
+    var pct = $('sc-load-pct');
+    if (bar) bar.style.width = progress + '%';
+    if (pct) pct.textContent = Math.round(progress) + '%';
+
+    // Transition when done
+    if (progress >= 100) {
+      clearInterval(_tipTimer);
+      _tipTimer = null;
       setTimeout(function () {
-        G.showScreen('gameplay');
-      }, 3200);
-    },
-    exit:   function () {},
-    update: function (dt) { _bossT += dt; },
-    render: function (ctx) {
-      ctx.fillStyle = '#0a0612';
-      ctx.fillRect(0, 0, DW, DH);
+        _loadingVisible = false;
+        showMenu();
+      }, 600);
+    }
+  }
 
-      // Lightning flashes
-      const flash = Math.max(0, Math.sin(_bossT * 12) - 0.6) / 0.4;
-      if (flash > 0) {
-        ctx.fillStyle = 'rgba(255,100,50,' + (flash * 0.25) + ')';
-        ctx.fillRect(0, 0, DW, DH);
+  // ── MENU SCREEN ─────────────────────────────────────────────────────────────
+
+  function showMenu() {
+    G.showScreen('menu');
+
+    var coins = (G.state && G.state.coins) || 0;
+
+    // SVG dusk sky landscape with hills + crane
+    var skyBg = [
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 320" preserveAspectRatio="xMidYMax slice"',
+      ' style="position:absolute;bottom:0;left:0;width:100%;height:60%">',
+      '<defs><linearGradient id="sky-g" x1="0" y1="0" x2="0" y2="1">',
+      '<stop offset="0%" stop-color="#1a0e2e"/>',
+      '<stop offset="50%" stop-color="#3d1654"/>',
+      '<stop offset="100%" stop-color="#c45820"/>',
+      '</linearGradient>',
+      '<linearGradient id="sun-g" x1="0" y1="0" x2="0" y2="1">',
+      '<stop offset="0%" stop-color="#ffe066"/>',
+      '<stop offset="100%" stop-color="#f5a623"/>',
+      '</linearGradient></defs>',
+      // Sky fill
+      '<rect width="1200" height="320" fill="url(#sky-g)"/>',
+      // Sun / glow disk
+      '<ellipse cx="900" cy="260" rx="80" ry="80" fill="url(#sun-g)" opacity=".65"/>',
+      '<ellipse cx="900" cy="260" rx="130" ry="130" fill="#f5a623" opacity=".18"/>',
+      // Far hills
+      '<path d="M0 320 L0 220 Q90 160 180 200 Q270 240 360 170 Q450 100 540 160',
+      ' Q630 220 720 140 Q810 60 900 130 Q990 200 1080 150 Q1140 110 1200 170 L1200 320 Z"',
+      ' fill="#3d1a00" opacity=".8"/>',
+      // Near hills
+      '<path d="M0 320 L0 270 Q100 230 200 260 Q300 290 400 240 Q500 190 600 250',
+      ' Q700 310 800 260 Q900 210 1000 260 Q1100 310 1200 270 L1200 320 Z"',
+      ' fill="#2a1200"/>',
+      '</svg>',
+    ].join('');
+
+    // Smoke puffs from crane
+    var smokePuffs = '';
+    for (var i = 0; i < 3; i++) {
+      smokePuffs += '<div style="position:absolute;bottom:80px;right:82px;width:' + (10 + i * 3) +
+        'px;height:' + (10 + i * 3) + 'px;border-radius:50%;background:rgba(160,140,120,.45);' +
+        'animation:sc-smoke 2.6s ease-out ' + (i * 0.8) + 's infinite"></div>';
+    }
+
+    // Rocky hero dino for menu
+    var rockyImg = '';
+    if (window.DINO_ROSTER) {
+      var rocky = window.DINO_ROSTER.find(function (d) { return d.id === 'rocky'; });
+      if (rocky) {
+        rockyImg = '<img src="' + rocky.svgDataURI + '" width="130" height="104" alt="Rocky" ' +
+          'style="animation:sc-float 2.2s ease-in-out infinite;filter:drop-shadow(0 8px 18px rgba(0,200,0,.4))">';
       }
+    }
 
-      // BOSS text
-      const scale = Math.min(_bossT / 0.5, 1);
-      ctx.save();
-      ctx.translate(DW / 2, DH * 0.38);
-      ctx.scale(scale, scale);
-      shadow(ctx, 'rgba(255,50,0,.8)', 40);
-      ctx.fillStyle = '#ff2020';
-      ctx.font = "800 80px 'Bungee', cursive";
-      ctx.textAlign = 'center';
-      ctx.fillText('BAAS!', 0, 0);
-      noShadow(ctx);
+    setHTML(
+      '<div class="sc-full" style="background:#1a0e2e;display:flex;flex-direction:column;' +
+        'align-items:center;justify-content:flex-start;color:#fff;overflow:hidden">' +
 
-      const lv = window.LEVELS[G.state.currentLevel - 1];
-      if (lv) {
-        shadow(ctx, 'rgba(245,200,0,.5)', 16);
-        ctx.fillStyle = '#f5c842';
-        ctx.font = "700 32px 'Baloo 2', cursive";
-        ctx.fillText(lv.name, 0, 60);
-        noShadow(ctx);
+        // Sky background SVG
+        skyBg +
+
+        // Crane (right side with smoke)
+        '<div style="position:absolute;bottom:0;right:28px">' +
+          SVG_CRANE + smokePuffs +
+        '</div>' +
+
+        // Logo
+        '<div style="position:relative;z-index:1;text-align:center;margin-top:clamp(18px,5vh,40px)">' +
+          '<div style="font-family:\'Bungee\',cursive;font-size:clamp(2.4rem,7vw,5rem);color:#ffd23f;' +
+            'line-height:1.05;text-shadow:0 0 44px rgba(255,210,63,.7),0 4px 0 #8b6000,0 6px 24px rgba(0,0,0,.7)">' +
+            'DINO GOOIERS</div>' +
+          '<div style="font-family:\'Nunito\',sans-serif;font-size:clamp(.85rem,2.4vw,1.2rem);' +
+            'color:rgba(255,255,255,.55);letter-spacing:.06em;margin-top:2px">Gooi ze omver!</div>' +
+        '</div>' +
+
+        // Hero Rocky
+        '<div style="position:relative;z-index:1;margin:clamp(8px,2vh,20px) 0 clamp(4px,1.5vh,14px)">' +
+          (rockyImg || '') +
+        '</div>' +
+
+        // Buttons
+        '<div style="position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;' +
+          'gap:clamp(8px,1.8vh,16px);width:min(320px,82vw)">' +
+          '<button id="btn-spelen" class="sc-btn sc-btn-gold" style="width:100%;font-size:clamp(1.1rem,3.2vw,1.55rem);padding:clamp(12px,2.2vh,18px) 32px">' +
+            '▶  SPELEN' +
+          '</button>' +
+          '<button id="btn-worldmap" class="sc-btn sc-btn-purple" style="width:100%;font-size:clamp(.9rem,2.5vw,1.15rem);padding:clamp(10px,1.8vh,14px) 24px">' +
+            '🗺  WERELD KAART' +
+          '</button>' +
+          '<button id="btn-shop" class="sc-btn sc-btn-purple" style="width:100%;font-size:clamp(.9rem,2.5vw,1.15rem);padding:clamp(10px,1.8vh,14px) 24px">' +
+            '🛒  WINKEL' +
+          '</button>' +
+        '</div>' +
+
+        // Bottom bar — coins + settings
+        '<div style="position:absolute;bottom:16px;left:0;right:0;display:flex;' +
+          'justify-content:space-between;align-items:center;padding:0 20px;z-index:1">' +
+          // Coins
+          '<div style="display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.45);' +
+            'border-radius:20px;padding:6px 14px;border:1px solid rgba(255,210,0,.3)">' +
+            '<span style="font-size:1.3rem">🪙</span>' +
+            '<span style="font-family:\'Baloo 2\',cursive;font-size:1rem;font-weight:700;color:#ffd23f">' +
+              coins.toLocaleString('nl') + '</span>' +
+          '</div>' +
+          // Settings gear
+          '<button id="btn-settings" class="sc-btn sc-btn-purple" style="font-size:1.3rem;padding:8px 12px;border-radius:50%;width:44px;height:44px;line-height:1;display:flex;align-items:center;justify-content:center">' +
+            '⚙️' +
+          '</button>' +
+        '</div>' +
+
+      '</div>'
+    );
+
+    // Button handlers
+    $('btn-spelen').addEventListener('click', function () {
+      var worldIdx = (G.state && G.state.currentWorld) ? G.state.currentWorld - 1 : 0;
+      showWorldMap(worldIdx);
+    });
+    $('btn-worldmap').addEventListener('click', function () {
+      var worldIdx = (G.state && G.state.currentWorld) ? G.state.currentWorld - 1 : 0;
+      showWorldMap(worldIdx);
+    });
+    $('btn-shop').addEventListener('click', function () {
+      // Placeholder — winkel coming soon
+    });
+    $('btn-settings').addEventListener('click', function () {
+      // Placeholder
+    });
+  }
+
+  // ── WORLD MAP SCREEN ─────────────────────────────────────────────────────────
+
+  function showWorldMap(worldIndex) {
+    worldIndex = Math.max(0, Math.min(2, worldIndex || 0));
+    G.showScreen('worldmap');
+
+    var w = WORLDS[worldIndex];
+    var maxLevel = (G.state && G.state.maxLevel) || 1;
+    var starData = (G.state && G.state.stars) || [];
+    var firstLevel = worldIndex * 10 + 1;  // 1, 11, 21
+    var levels = window.LEVELS ? window.LEVELS.filter(function (l) { return l.world === worldIndex + 1; }) : [];
+
+    // Node layout: 5 cols × 2 rows, serpentine (row 0 left→right, row 1 right→left)
+    // Position is in percentage of the map container
+    function nodePos(localIdx) {
+      var row = localIdx < 5 ? 0 : 1;
+      var col = row === 0 ? localIdx : 9 - localIdx;  // col 0-4
+      var x = 10 + col * 20;   // 10%, 30%, 50%, 70%, 90%
+      var y = row === 0 ? 35 : 72;
+      return { x: x, y: y };
+    }
+
+    // Build SVG path connecting nodes (rope/chain)
+    var pathD = '';
+    for (var i = 0; i < 10; i++) {
+      var p = nodePos(i);
+      pathD += (i === 0 ? 'M' : 'L') + p.x + ' ' + p.y + ' ';
+    }
+
+    // Build node HTML
+    var nodesHTML = '';
+    for (var ni = 0; ni < 10; ni++) {
+      var levelId = firstLevel + ni;
+      var pos = nodePos(ni);
+      var levelData = levels[ni];
+      var isBoss = levelData && levelData.isBoss;
+      var isLocked = levelId > maxLevel;
+      var stars = starData[levelId - 1] || 0;
+
+      var nodeBg = isLocked ? 'rgba(30,20,50,.9)'
+                 : isBoss   ? 'linear-gradient(135deg,#b71c1c,#7f0000)'
+                            : 'linear-gradient(135deg,' + w.nodeBg + ',rgba(0,0,0,.3))';
+      var borderColor = isBoss ? '#ff5252' : isLocked ? 'rgba(255,255,255,.15)' : w.accent;
+      var borderExtra = isBoss ? 'box-shadow:0 0 18px rgba(255,50,50,.7),0 0 6px rgba(255,50,50,.5);' : '';
+      var innerContent = isLocked
+        ? '<span style="font-size:1.1rem">🔒</span>'
+        : isBoss
+          ? '<span style="font-size:1.3rem">💀</span>'
+          : '<span style="font-family:\'Bungee\',cursive;font-size:1rem;color:#fff">' + levelId + '</span>';
+      var nodeSize = isBoss ? 58 : 46;
+      var levelName = levelData ? levelData.name : '';
+
+      nodesHTML +=
+        '<div class="wm-node" data-level="' + levelId + '" data-locked="' + (isLocked ? '1' : '0') + '" ' +
+          'style="position:absolute;left:calc(' + pos.x + '% - ' + (nodeSize / 2) + 'px);' +
+          'top:calc(' + pos.y + '% - ' + (nodeSize / 2) + 'px);' +
+          'width:' + nodeSize + 'px;height:' + nodeSize + 'px;border-radius:50%;' +
+          'background:' + nodeBg + ';' +
+          'border:2.5px solid ' + borderColor + ';' + borderExtra +
+          'display:flex;align-items:center;justify-content:center;cursor:' + (isLocked ? 'default' : 'pointer') + ';' +
+          'transition:transform .15s,filter .15s;z-index:2">' +
+          '<div>' +
+            innerContent +
+            (stars > 0 && !isLocked
+              ? '<div style="position:absolute;bottom:-18px;left:50%;transform:translateX(-50%);white-space:nowrap">' +
+                starsHTML(stars, 11) + '</div>'
+              : '') +
+            '<div style="position:absolute;top:' + (nodeSize + 22) + 'px;left:50%;transform:translateX(-50%);' +
+              'white-space:nowrap;font-family:\'Nunito\',sans-serif;font-size:10px;color:' + w.textColor + ';' +
+              'text-align:center;max-width:80px;line-height:1.2">' + levelName + '</div>' +
+          '</div>' +
+        '</div>';
+    }
+
+    setHTML(
+      '<div class="sc-full" style="background:' + w.bg + ';color:#fff;display:flex;flex-direction:column">' +
+
+        // Header
+        '<div style="position:relative;z-index:3;display:flex;align-items:center;justify-content:center;' +
+          'padding:14px 20px;background:rgba(0,0,0,.35);border-bottom:1px solid rgba(255,255,255,.1);flex-shrink:0">' +
+          // Back button
+          '<button id="btn-wm-back" class="sc-btn sc-btn-blue" style="position:absolute;left:16px;' +
+            'font-size:.85rem;padding:7px 14px;border-radius:10px">← Terug</button>' +
+          // Title
+          '<div style="text-align:center">' +
+            '<div style="font-family:\'Bungee\',cursive;font-size:clamp(1rem,3vw,1.5rem);color:#ffd23f">' +
+              'WERELD ' + w.num + '</div>' +
+            '<div style="font-family:\'Nunito\',sans-serif;font-size:clamp(.7rem,1.8vw,.9rem);' +
+              'color:' + w.textColor + ';letter-spacing:.06em">' + w.name + '</div>' +
+          '</div>' +
+          // World nav buttons
+          '<div style="position:absolute;right:16px;display:flex;gap:8px">' +
+            (worldIndex > 0
+              ? '<button id="btn-wm-prev" class="sc-btn sc-btn-purple" style="font-size:.8rem;padding:6px 12px;border-radius:10px">◀</button>'
+              : '') +
+            (worldIndex < 2
+              ? '<button id="btn-wm-next" class="sc-btn sc-btn-purple" style="font-size:.8rem;padding:6px 12px;border-radius:10px">▶</button>'
+              : '') +
+          '</div>' +
+        '</div>' +
+
+        // Map area
+        '<div id="wm-map" style="position:relative;flex:1;overflow:hidden">' +
+
+          // SVG connecting path (rope/chain)
+          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none" ' +
+            'style="position:absolute;inset:0;width:100%;height:100%;overflow:visible;z-index:1">' +
+            '<defs>' +
+              '<filter id="rope-blur"><feGaussianBlur stdDeviation=".3"/></filter>' +
+            '</defs>' +
+            // Shadow rope
+            '<path d="' + pathD + '" fill="none" stroke="rgba(0,0,0,.5)" stroke-width="2.2" stroke-linecap="round"' +
+              ' stroke-dasharray="4 3" stroke-dashoffset="0" filter="url(#rope-blur)" vector-effect="non-scaling-stroke"/>' +
+            // Main rope
+            '<path d="' + pathD + '" fill="none" stroke="rgba(200,160,80,.7)" stroke-width="2" stroke-linecap="round"' +
+              ' stroke-dasharray="4 3" vector-effect="non-scaling-stroke"/>' +
+            // Knot dots
+            [0,1,2,3,4,5,6,7,8,9].map(function (i) {
+              var p = nodePos(i);
+              return '<circle cx="' + p.x + '" cy="' + p.y + '" r=".8" fill="rgba(200,160,80,.9)"/>';
+            }).join('') +
+          '</svg>' +
+
+          // Level nodes
+          nodesHTML +
+
+        '</div>' +
+
+      '</div>'
+    );
+
+    // Button handlers
+    $('btn-wm-back').addEventListener('click', function () { showMenu(); });
+    if ($('btn-wm-prev')) {
+      $('btn-wm-prev').addEventListener('click', function () { showWorldMap(worldIndex - 1); });
+    }
+    if ($('btn-wm-next')) {
+      $('btn-wm-next').addEventListener('click', function () { showWorldMap(worldIndex + 1); });
+    }
+
+    // Level node tap handlers
+    var nodes = document.querySelectorAll('.wm-node');
+    nodes.forEach(function (node) {
+      if (node.dataset.locked === '1') {
+        node.addEventListener('click', function () {
+          node.style.animation = 'sc-shake .4s ease';
+          setTimeout(function () { node.style.animation = ''; }, 420);
+        });
+        return;
       }
-      ctx.restore();
+      node.style.setProperty('transition', 'transform .15s,filter .15s');
+      node.addEventListener('mouseenter', function () { node.style.transform = 'scale(1.15)'; node.style.filter = 'brightness(1.2)'; });
+      node.addEventListener('mouseleave', function () { node.style.transform = ''; node.style.filter = ''; });
+      node.addEventListener('click', function () {
+        var lvl = parseInt(node.dataset.level, 10);
+        G.setState({ currentLevel: lvl });
+        var levelData = window.LEVELS && window.LEVELS.find(function (l) { return l.id === lvl; });
+        if (levelData && levelData.isBoss) {
+          var bossIdx = Math.floor((lvl - 1) / 10);
+          showBossIntro(bossIdx);
+        } else {
+          clearScreen();
+          G.showScreen('gameplay');
+        }
+      });
+    });
+  }
 
-      // Warning stripe bars (top and bottom)
-      const stripe = 14;
-      for (let x = -36; x < DW + 36; x += 36) {
-        const alt = Math.floor((x + _bossT * 40) / 36) % 2;
-        ctx.fillStyle = alt ? 'rgba(255,180,0,.75)' : 'rgba(0,0,0,.75)';
-        ctx.save();
-        ctx.transform(1, 0, 0.5, 1, 0, 0);
-        ctx.fillRect(x, 0, 36, stripe);
-        ctx.fillRect(x, DH - stripe, 36, stripe);
-        ctx.restore();
+  // ── LEVEL COMPLETE SCREEN ────────────────────────────────────────────────────
+
+  function showLevelComplete(levelId, stars, score, details) {
+    stars = Math.max(0, Math.min(3, stars || 0));
+    score = score || 0;
+    details = details || {};
+    var coinsEarned = details.coinsEarned || Math.round(score / 100);
+    var levelData = window.LEVELS && window.LEVELS.find(function (l) { return l.id === levelId; });
+    var levelName = levelData ? levelData.name : ('Niveau ' + levelId);
+    var isLast = levelId >= 30;
+
+    // Update game state
+    G.setState({ lastStars: stars, lastScore: score });
+    if (window.Storage) window.Storage.saveLevel(levelId, stars, score);
+    G.showScreen('levelcomplete');
+
+    setHTML(
+      '<div class="sc-full" style="background:rgba(10,6,18,.88);display:flex;align-items:center;justify-content:center">' +
+
+        // Panel
+        '<div style="background:linear-gradient(160deg,#1e1040 0%,#0a0820 100%);border-radius:22px;' +
+          'border:2px solid rgba(180,130,255,.28);box-shadow:0 0 50px rgba(80,30,180,.5);' +
+          'padding:clamp(22px,4vh,40px) clamp(26px,5vw,52px);text-align:center;' +
+          'width:min(560px,90vw);max-height:90vh;overflow-y:auto">' +
+
+          // Title
+          '<div style="font-family:\'Bungee\',cursive;font-size:clamp(1.5rem,5vw,2.5rem);color:#6eff50;' +
+            'text-shadow:0 0 22px rgba(100,255,80,.55);margin-bottom:clamp(10px,2vh,20px)">' +
+            'NIVEAU VOLTOOID!' +
+          '</div>' +
+
+          // Level name badge
+          '<div style="font-family:\'Nunito\',sans-serif;font-size:clamp(.7rem,2vw,.95rem);' +
+            'color:rgba(200,180,255,.6);letter-spacing:.04em;margin-bottom:clamp(12px,2.5vh,22px)">' +
+            'Niveau ' + levelId + ' — ' + levelName +
+          '</div>' +
+
+          // Stars
+          '<div style="display:flex;justify-content:center;gap:clamp(10px,3vw,24px);' +
+            'margin-bottom:clamp(14px,3vh,26px)" id="lc-stars">' +
+            [0, 1, 2].map(function (i) {
+              return '<span class="sc-star-slot" id="lc-star-' + i + '" style="' +
+                (i < stars
+                  ? 'animation-delay:' + (i * 0.28) + 's;animation-duration:.45s'
+                  : '') + '">' +
+                '⭐</span>';
+            }).join('') +
+          '</div>' +
+
+          // Score
+          '<div style="font-family:\'Bungee\',cursive;font-size:clamp(1.3rem,4vw,2rem);color:#ffd23f;' +
+            'text-shadow:0 0 18px rgba(255,200,0,.5);margin-bottom:clamp(8px,1.5vh,16px)">' +
+            score.toLocaleString('nl') +
+          '</div>' +
+
+          // Score breakdown
+          '<div style="font-family:\'Nunito\',sans-serif;font-size:clamp(.75rem,2vw,.95rem);' +
+            'color:rgba(255,255,255,.6);line-height:2;margin-bottom:clamp(12px,2.5vh,22px)">' +
+            (details.enemiesDefeated !== undefined
+              ? '<div>Vijanden verslagen: <b style="color:#fff">' + details.enemiesDefeated + '</b></div>' : '') +
+            (details.blocksDestroyed !== undefined
+              ? '<div>Blokken vernietigd: <b style="color:#fff">' + details.blocksDestroyed + '</b></div>' : '') +
+            (details.bonusDinos !== undefined
+              ? '<div>Bonus dino\'s over: <b style="color:#ffd23f">+' + details.bonusDinos + '</b></div>' : '') +
+            (coinsEarned > 0
+              ? '<div>Munten verdiend: <b style="color:#ffd23f">+' + coinsEarned + ' 🪙</b></div>' : '') +
+          '</div>' +
+
+          // Buttons
+          '<div style="display:flex;gap:clamp(10px,2.5vw,20px);justify-content:center;flex-wrap:wrap">' +
+            '<button id="btn-lc-retry" class="sc-btn sc-btn-red" style="font-size:clamp(.85rem,2.3vw,1.1rem);padding:12px 22px;min-width:130px">' +
+              '↩ OPNIEUW' +
+            '</button>' +
+            '<button id="btn-lc-next" class="sc-btn sc-btn-green" style="font-size:clamp(.85rem,2.3vw,1.1rem);padding:12px 22px;min-width:130px">' +
+              (isLast ? '🗺 KAART' : 'VOLGENDE ▶') +
+            '</button>' +
+          '</div>' +
+
+        '</div>' +
+
+        // Coin burst animation container
+        '<div id="lc-coin-burst" style="position:absolute;inset:0;pointer-events:none;overflow:hidden"></div>' +
+
+      '</div>'
+    );
+
+    // Animate stars in one by one
+    for (var si = 0; si < stars; si++) {
+      (function (idx) {
+        setTimeout(function () {
+          var el = $('lc-star-' + idx);
+          if (el) el.classList.add('lit');
+        }, idx * 280 + 200);
+      }(si));
+    }
+
+    // Coins flying animation
+    if (coinsEarned > 0) {
+      setTimeout(function () {
+        var burst = $('lc-coin-burst');
+        if (!burst) return;
+        var count = Math.min(coinsEarned, 12);
+        for (var ci = 0; ci < count; ci++) {
+          (function (idx) {
+            setTimeout(function () {
+              if (!$('lc-coin-burst')) return;
+              var coin = document.createElement('div');
+              var sx = 30 + Math.random() * 40;
+              var sy = 40 + Math.random() * 20;
+              var dx = -(sx - 8) + 'vw';
+              var dy = -(sy - 92) + 'vh';
+              coin.style.cssText = 'position:absolute;left:' + sx + '%;top:' + sy +
+                '%;font-size:1.4rem;--cdx:' + dx + ';--cdy:' + dy +
+                ';animation:sc-coin .9s ease-in forwards';
+              coin.textContent = '🪙';
+              burst.appendChild(coin);
+              setTimeout(function () { if (coin.parentNode) coin.parentNode.removeChild(coin); }, 950);
+            }, idx * 80);
+          }(ci));
+        }
+      }, stars * 280 + 500);
+    }
+
+    // Button handlers
+    $('btn-lc-retry').addEventListener('click', function () {
+      clearScreen();
+      G.showScreen('gameplay');
+    });
+    $('btn-lc-next').addEventListener('click', function () {
+      if (isLast) {
+        showWorldMap(Math.min(2, Math.floor((levelId - 1) / 10)));
+      } else {
+        G.setState({ currentLevel: levelId + 1 });
+        var nextData = window.LEVELS && window.LEVELS.find(function (l) { return l.id === levelId + 1; });
+        if (nextData && nextData.isBoss) {
+          showBossIntro(Math.floor((levelId) / 10));
+        } else {
+          clearScreen();
+          G.showScreen('gameplay');
+        }
       }
-    },
+    });
+  }
+
+  // ── GAME OVER SCREEN ─────────────────────────────────────────────────────────
+
+  function showGameOver() {
+    var score = (G.state && G.state.lastScore) || 0;
+    G.showScreen('gameover');
+
+    setHTML(
+      '<div class="sc-full" style="background:rgba(8,2,6,.92);display:flex;align-items:center;justify-content:center">' +
+
+        // Red vignette
+        '<div style="position:absolute;inset:0;background:radial-gradient(ellipse at center,transparent 30%,rgba(180,0,0,.4) 100%);pointer-events:none"></div>' +
+
+        // Panel
+        '<div style="position:relative;z-index:1;background:linear-gradient(160deg,#180810 0%,#0e0408 100%);' +
+          'border-radius:22px;border:2px solid rgba(200,60,60,.38);' +
+          'box-shadow:0 0 50px rgba(200,0,0,.45);' +
+          'padding:clamp(24px,4vh,42px) clamp(28px,6vw,60px);text-align:center;' +
+          'width:min(500px,88vw)">' +
+
+          // Sad T-Rex
+          '<div style="display:flex;justify-content:center;margin-bottom:clamp(8px,1.5vh,16px)">' +
+            SVG_SAD_REX +
+          '</div>' +
+
+          // Title
+          '<div style="font-family:\'Bungee\',cursive;font-size:clamp(2rem,6vw,3.2rem);color:#ff4040;' +
+            'text-shadow:0 0 28px rgba(255,50,50,.7);animation:sc-shake .5s ease .3s;' +
+            'margin-bottom:8px">GAME OVER</div>' +
+
+          // Subtitle
+          '<div style="font-family:\'Nunito\',sans-serif;font-size:clamp(.8rem,2.2vw,1.05rem);' +
+            'color:rgba(255,180,180,.7);margin-bottom:clamp(12px,2.5vh,22px)">' +
+            'De Tirannen hebben gewonnen... dit keer.' +
+          '</div>' +
+
+          // Score
+          '<div style="font-family:\'Bungee\',cursive;font-size:clamp(1.2rem,3.5vw,1.8rem);color:#ffd23f;' +
+            'text-shadow:0 0 14px rgba(255,200,0,.5);margin-bottom:clamp(16px,3vh,28px)">' +
+            score.toLocaleString('nl') +
+          '</div>' +
+
+          // Buttons
+          '<div style="display:flex;flex-direction:column;align-items:center;gap:clamp(10px,2vh,16px)">' +
+            '<button id="btn-go-retry" class="sc-btn sc-btn-red" style="font-size:clamp(.9rem,2.5vw,1.15rem);padding:13px 32px;width:100%;max-width:280px">' +
+              '↩ OPNIEUW PROBEREN' +
+            '</button>' +
+            '<button id="btn-go-map" class="sc-btn sc-btn-blue" style="font-size:clamp(.8rem,2.2vw,1rem);padding:10px 24px;width:100%;max-width:200px">' +
+              '🗺 KAART' +
+            '</button>' +
+          '</div>' +
+
+        '</div>' +
+
+      '</div>'
+    );
+
+    $('btn-go-retry').addEventListener('click', function () {
+      clearScreen();
+      G.showScreen('gameplay');
+    });
+    $('btn-go-map').addEventListener('click', function () {
+      var worldIdx = G.state ? Math.max(0, Math.floor(((G.state.currentLevel || 1) - 1) / 10)) : 0;
+      showWorldMap(worldIdx);
+    });
+  }
+
+  // ── BOSS INTRO SCREEN ─────────────────────────────────────────────────────────
+
+  function showBossIntro(bossIndex) {
+    bossIndex = bossIndex || 0;
+    var boss = window.BOSS_DINOS && window.BOSS_DINOS[bossIndex];
+    var bossName = boss ? boss.dutchName : 'De Eindbaas';
+    var bossHealth = boss ? boss.health : 500;
+    var bossImg = boss ? boss.svgDataURI : '';
+
+    // Lightning bolt positions
+    var bolts = '';
+    for (var bi = 0; bi < 5; bi++) {
+      var lx = 10 + bi * 20;
+      var ld = (bi * 0.3).toFixed(1);
+      var lh = 1.2 + (bi % 3) * 0.4;
+      bolts += '<div style="position:absolute;left:' + lx + '%;top:0;width:3px;height:100%;' +
+        'background:linear-gradient(180deg,transparent 0%,#fff 40%,#80d8ff 60%,transparent 100%);' +
+        'opacity:0;animation:sc-lightning ' + lh + 's ' + ld + 's ease-in-out infinite;' +
+        'pointer-events:none;filter:blur(1px)"></div>';
+    }
+
+    // Red flicker vignette
+    var vignette = '<div style="position:absolute;inset:0;' +
+      'background:radial-gradient(ellipse at center,transparent 20%,rgba(150,0,0,.5) 100%);' +
+      'animation:sc-flash 1.8s ease-in-out infinite;pointer-events:none"></div>';
+
+    setHTML(
+      '<div class="sc-full" style="background:#0a0006;display:flex;flex-direction:column;' +
+        'align-items:center;justify-content:center;color:#fff;overflow:hidden">' +
+
+        // Lightning bolts
+        bolts +
+        vignette +
+
+        // Boss dino SVG
+        (bossImg
+          ? '<div style="position:relative;z-index:2;animation:sc-pulse 1.4s ease-in-out infinite;margin-bottom:clamp(8px,2vh,18px)">' +
+              '<img src="' + bossImg + '" width="200" height="200" alt="' + bossName + '" ' +
+                'style="filter:drop-shadow(0 0 28px rgba(255,30,30,.8)) drop-shadow(0 0 8px rgba(255,80,80,.5))">' +
+            '</div>'
+          : ''),
+
+        // Boss name
+        '<div style="position:relative;z-index:2;text-align:center;margin-bottom:clamp(10px,2.5vh,22px)">' +
+          '<div style="font-family:\'Nunito\',sans-serif;font-size:clamp(.7rem,2vw,.9rem);' +
+            'color:rgba(255,160,160,.7);letter-spacing:.14em;text-transform:uppercase;margin-bottom:4px">' +
+            '— GEVAARSNIVEAU KRITIEK —' +
+          '</div>' +
+          '<div style="font-family:\'Bungee\',cursive;font-size:clamp(1.4rem,4.5vw,2.6rem);color:#ff4040;' +
+            'text-shadow:0 0 30px rgba(255,30,30,.9),0 3px 0 #5a0000;line-height:1.1">' +
+            bossName + '</div>' +
+        '</div>' +
+
+        // Health bar
+        '<div style="position:relative;z-index:2;width:min(380px,76vw)">' +
+          '<div style="font-family:\'Nunito\',sans-serif;font-size:.8rem;color:rgba(255,200,200,.6);' +
+            'text-align:center;margin-bottom:6px;letter-spacing:.06em">LEVENSPUNTEN: ' + bossHealth + '</div>' +
+          '<div style="height:16px;background:rgba(80,0,0,.6);border-radius:8px;overflow:hidden;' +
+            'border:1.5px solid rgba(255,60,60,.4)">' +
+            '<div style="height:100%;background:linear-gradient(90deg,#ff1744,#ff6d00);border-radius:8px;' +
+              'animation:sc-hpslam .8s .4s cubic-bezier(.22,1,.36,1) both"></div>' +
+          '</div>' +
+        '</div>' +
+
+        // "GEVECHT BEGINT!" text — fades in after 1.8s
+        '<div style="position:relative;z-index:2;font-family:\'Bungee\',cursive;' +
+          'font-size:clamp(1rem,3.5vw,1.8rem);color:#ffd23f;margin-top:clamp(14px,3vh,26px);' +
+          'text-shadow:0 0 20px rgba(255,200,0,.7);opacity:0;' +
+          'animation:sc-fadeup .5s 1.8s ease forwards;letter-spacing:.08em">' +
+          'GEVECHT BEGINT!' +
+        '</div>' +
+
+        // Countdown dots
+        '<div style="position:absolute;bottom:24px;left:0;right:0;text-align:center;z-index:2;' +
+          'font-family:\'Nunito\',sans-serif;font-size:.85rem;color:rgba(255,150,150,.5)">' +
+          'Begint over 3 seconden...' +
+        '</div>' +
+
+      '</div>'
+    );
+
+    // Auto-advance to gameplay after 3 seconds
+    var _bossTimeout = setTimeout(function () {
+      clearScreen();
+      G.showScreen('gameplay');
+    }, 3000);
+
+    // Allow tapping to skip
+    sc().addEventListener('pointerdown', function skipHandler() {
+      sc().removeEventListener('pointerdown', skipHandler);
+      clearTimeout(_bossTimeout);
+      clearScreen();
+      G.showScreen('gameplay');
+    }, { once: true });
+  }
+
+  // ── Public API ──────────────────────────────────────────────────────────────
+
+  window.Screens = {
+    showSplash:        showSplash,
+    showLoading:       showLoading,
+    showMenu:          showMenu,
+    showWorldMap:      showWorldMap,
+    showLevelComplete: showLevelComplete,
+    showGameOver:      showGameOver,
+    showBossIntro:     showBossIntro,
+    clearScreen:       clearScreen,
+  };
+
+  // ── Register minimal canvas hooks ────────────────────────────────────────────
+  // These paint a solid dark background so the engine's fallback
+  // placeholder text never shows through the HTML overlay.
+
+  var _canvasBg = '#1a0e2e';
+
+  function _darkRender(ctx) {
+    ctx.fillStyle = _canvasBg;
+    ctx.fillRect(0, 0, G.DESIGN_WIDTH, G.DESIGN_HEIGHT);
+  }
+
+  var _htmlScreens = ['splash', 'loading', 'menu', 'worldmap', 'levelcomplete', 'gameover'];
+  _htmlScreens.forEach(function (name) {
+    G.registerScreen(name, {
+      enter:  function () {},
+      exit:   function () {},
+      update: function () {},
+      render: _darkRender,
+    });
   });
 
-  // ── Storage helper (thin wrapper; real storage in main.js) ───────────────
-  // Exposed here so button callbacks can call it safely
+  // When engine transitions to gameplay or bossbattle, clear the HTML overlay.
+  G.on('screenChange', function (e) {
+    if (e.to === 'gameplay' || e.to === 'bossbattle') {
+      clearScreen();
+    }
+  });
+
+  // ── Storage helper ───────────────────────────────────────────────────────────
+
   window.Storage = window.Storage || {
-    getBestTotal:  function () { return parseInt(localStorage.getItem('dg_best') || '0', 10); },
-    saveLevel:     function (lvl, stars, score) {
-      const key = 'dg_l' + lvl;
-      const prev = JSON.parse(localStorage.getItem(key) || '{"stars":0,"score":0}');
+    getBestTotal: function () {
+      return parseInt(localStorage.getItem('dg_best') || '0', 10);
+    },
+    saveLevel: function (lvl, stars, score) {
+      var key = 'dg_l' + lvl;
+      var prev = JSON.parse(localStorage.getItem(key) || '{"stars":0,"score":0}');
       if (stars > prev.stars || (stars === prev.stars && score > prev.score)) {
-        localStorage.setItem(key, JSON.stringify({ stars, score }));
+        localStorage.setItem(key, JSON.stringify({ stars: stars, score: score }));
       }
-      const best = parseInt(localStorage.getItem('dg_best') || '0', 10);
+      var best = parseInt(localStorage.getItem('dg_best') || '0', 10);
       if (score > best) localStorage.setItem('dg_best', score);
-      const maxLv = parseInt(localStorage.getItem('dg_maxlv') || '1', 10);
+      var maxLv = parseInt(localStorage.getItem('dg_maxlv') || '1', 10);
       if (lvl + 1 > maxLv) localStorage.setItem('dg_maxlv', lvl + 1);
     },
     load: function () {
-      const stars = [];
-      for (let i = 0; i < 30; i++) {
-        const d = JSON.parse(localStorage.getItem('dg_l' + (i + 1)) || '{"stars":0}');
+      var stars = [];
+      for (var i = 0; i < 30; i++) {
+        var d = JSON.parse(localStorage.getItem('dg_l' + (i + 1)) || '{"stars":0}');
         stars.push(d.stars);
       }
-      const maxLevel = parseInt(localStorage.getItem('dg_maxlv') || '1', 10);
-      return { stars, maxLevel };
+      var maxLevel = parseInt(localStorage.getItem('dg_maxlv') || '1', 10);
+      return { stars: stars, maxLevel: maxLevel };
     },
   };
 

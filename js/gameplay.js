@@ -495,12 +495,12 @@
       const saved = window.Storage.load();
       G.setState({ maxLevel: saved.maxLevel, stars: saved.stars });
       _phase = 'COMPLETE';
-      setTimeout(function () { G.showScreen('levelcomplete'); }, 600);
+      setTimeout(function () { G.emit('levelComplete', { levelId: G.state.currentLevel, stars: stars, score: _score }); }, 600);
     } else if (_dinoQueue.length === 0) {
       // Game over
       G.setState({ lastScore: _score });
       _phase = 'DEAD';
-      setTimeout(function () { G.showScreen('gameover'); }, 600);
+      setTimeout(function () { G.emit('gameOver', { score: _score }); }, 600);
     } else {
       _phase = 'NEXT_DINO';
       _timer = 0;
