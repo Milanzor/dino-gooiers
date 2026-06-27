@@ -57,7 +57,9 @@
   let _drillMode  = false;    // horn_drill: pass through blocks
   let _dmgMult    = 1;        // steel_bite damage multiplier
   let _stompMode  = false;    // ground_stomp: explode on ground hit
-  let _score      = 0;
+  let _score          = 0;
+  let _enemiesDefeated = 0;
+  let _blocksDestroyed = 0;
   let _timer      = 0;
   let _particles  = [];
   let _cleanup    = null;
@@ -199,6 +201,7 @@
     if (obj.hp <= 0) {
       obj.destroyed = true;
       _score += obj.pts;
+      _blocksDestroyed++;
       _spawnBlockDebris(pos.x, pos.y, obj.type);
       _removeBody(obj.body);
     }
@@ -209,6 +212,7 @@
     if (obj.hp <= 0) {
       obj.destroyed = true;
       _score += obj.pts;
+      _enemiesDefeated++;
       _spawnEnemyParticles(pos.x, pos.y);
       _removeBody(obj.body);
     }
@@ -483,8 +487,8 @@
 
     if (enemiesLeft <= 0) {
       // Level complete
-      const bogusDinoBonux = _dinoQueue.length * 1000;
-      _score += bogusDinoBonux;
+      const dinoBonus = _dinoQueue.length * 1000;
+      _score += dinoBonus;
       const dinos  = _level.dinos.length;
       const used   = dinos - _dinoQueue.length;
       const par    = _level.par;
@@ -495,7 +499,7 @@
       const saved = window.Storage.load();
       G.setState({ maxLevel: saved.maxLevel, stars: saved.stars });
       _phase = 'COMPLETE';
-      setTimeout(function () { G.emit('levelComplete', { levelId: G.state.currentLevel, stars: stars, score: _score }); }, 600);
+      setTimeout(function () { G.emit('levelComplete', { levelId: G.state.currentLevel, stars: stars, score: _score, details: { enemiesDefeated: _enemiesDefeated, blocksDestroyed: _blocksDestroyed, bonusDinos: _dinoQueue.length } }); }, 600);
     } else if (_dinoQueue.length === 0) {
       // Game over
       G.setState({ lastScore: _score });
@@ -521,11 +525,13 @@
     _level = window.LEVELS[levelIdx];
     if (!_level) { G.showScreen('worldmap'); return; }
 
-    _physObjs   = [];
-    _dinoQueue  = _level.dinos.slice(1); // first one is ready
-    _curDinoId  = _level.dinos[0];
-    _score      = 0;
-    _timer      = 0;
+    _physObjs        = [];
+    _dinoQueue       = _level.dinos.slice(1); // first one is ready
+    _curDinoId       = _level.dinos[0];
+    _score           = 0;
+    _enemiesDefeated = 0;
+    _blocksDestroyed = 0;
+    _timer           = 0;
     _particles  = [];
     _explosions = [];
     _activeBody = null;

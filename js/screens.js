@@ -269,10 +269,10 @@
       '</div>'
     );
 
-    // Single-tap handler — advance to loading screen
+    // Single-tap handler — advance to main menu
     $('sc-splash').addEventListener('pointerdown', function handler() {
       $('sc-splash').removeEventListener('pointerdown', handler);
-      showLoading(0);
+      showMenu();
     }, { once: true });
   }
 

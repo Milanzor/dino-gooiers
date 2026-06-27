@@ -720,6 +720,8 @@
             // Brief pause at 100% so the player sees it
             setTimeout(function () {
               hideLoadingOverlay();
+              // Show splash HTML once DOM overlay is gone
+              if (window.Screens) window.Screens.showSplash();
             }, 250);
           }
         );

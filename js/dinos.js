@@ -28,77 +28,98 @@
  */
 function buildQuadrupedSVG(opts = {}) {
   const { id = 'dino', bodyShape = 'round', extras = [] } = opts;
-  const bodyRx = bodyShape === 'long' ? 55 : bodyShape === 'wide' ? 60 : 45;
-  const bodyRy = bodyShape === 'wide' ? 35 : 38;
+  const bRx = bodyShape === 'long' ? 55 : bodyShape === 'wide' ? 60 : 46;
+  const bRy = bodyShape === 'wide' ? 34 : 38;
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 160" width="200" height="160" aria-hidden="true">
-  <g id="${id}-dino" style="--main:var(--main);--dark:var(--dark);--belly:var(--belly);--ink:var(--ink)">
-    <!-- achterste poten -->
-    <ellipse cx="70" cy="130" rx="14" ry="20" fill="var(--dark)" />
-    <ellipse cx="52" cy="148" rx="18" ry="8" fill="var(--dark)" />
-    <!-- voorste poten -->
-    <ellipse cx="120" cy="128" rx="12" ry="18" fill="var(--dark)" />
-    <ellipse cx="134" cy="146" rx="16" ry="7" fill="var(--dark)" />
-    <!-- romp -->
-    <ellipse cx="95" cy="100" rx="${bodyRx}" ry="${bodyRy}" fill="var(--main)" />
-    <!-- buik -->
-    <ellipse cx="95" cy="112" rx="${bodyRx - 12}" ry="${bodyRy - 14}" fill="var(--belly)" />
-    <!-- nek -->
-    <ellipse cx="148" cy="80" rx="20" ry="28" fill="var(--main)" />
-    <!-- hoofd -->
-    <ellipse cx="164" cy="58" rx="26" ry="22" fill="var(--main)" />
-    <!-- oog-wit -->
-    <circle cx="172" cy="50" r="8" fill="var(--belly)" />
-    <!-- pupil -->
-    <circle cx="174" cy="50" r="4" fill="var(--ink)" />
-    <!-- nostril -->
-    <circle cx="185" cy="60" r="3" fill="var(--dark)" />
-    <!-- mond-lijn -->
-    <path d="M168 68 Q178 74 188 68" stroke="var(--dark)" stroke-width="2" fill="none" />
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 210 165" width="210" height="165" aria-hidden="true">
+  <defs>
+    <filter id="${id}-shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="rgba(0,0,0,0.45)"/>
+    </filter>
+  </defs>
+  <g id="${id}-dino" filter="url(#${id}-shadow)">
     <!-- staart -->
-    <path d="M42 102 Q12 90 8 108 Q12 126 38 118" fill="var(--main)" />
+    <path d="M44 106 Q16 90 9 112 Q13 134 41 124 Q47 120 44 106Z"
+      fill="var(--main)" stroke="var(--ink)" stroke-width="2.2" stroke-linejoin="round"/>
+    <!-- achterste poot -->
+    <ellipse cx="72" cy="128" rx="13" ry="20" fill="var(--dark)" stroke="var(--ink)" stroke-width="1.8"/>
+    <path d="M60 147 Q66 156 72 152 Q78 156 84 147" fill="var(--dark)" stroke="var(--ink)" stroke-width="1.5" stroke-linecap="round"/>
+    <!-- voorste poot -->
+    <ellipse cx="122" cy="128" rx="11" ry="17" fill="var(--dark)" stroke="var(--ink)" stroke-width="1.8"/>
+    <path d="M112 144 Q118 153 124 148 Q130 153 136 144" fill="var(--dark)" stroke="var(--ink)" stroke-width="1.5" stroke-linecap="round"/>
+    <!-- romp -->
+    <ellipse cx="96" cy="100" rx="${bRx}" ry="${bRy}" fill="var(--main)" stroke="var(--ink)" stroke-width="2.5"/>
+    <!-- buik -->
+    <ellipse cx="96" cy="112" rx="${bRx - 13}" ry="${bRy - 16}" fill="var(--belly)" stroke="var(--ink)" stroke-width="1.5"/>
+    <!-- romp glans -->
+    <ellipse cx="82" cy="86" rx="${Math.round(bRx * 0.44)}" ry="${Math.round(bRy * 0.3)}" fill="rgba(255,255,255,0.18)"/>
+    <!-- nek -->
+    <ellipse cx="150" cy="80" rx="19" ry="27" fill="var(--main)" stroke="var(--ink)" stroke-width="2.2"/>
+    <!-- hoofd -->
+    <ellipse cx="166" cy="57" rx="26" ry="22" fill="var(--main)" stroke="var(--ink)" stroke-width="2.5"/>
+    <!-- snuit -->
+    <ellipse cx="182" cy="64" rx="14" ry="10" fill="var(--main)" stroke="var(--ink)" stroke-width="2"/>
+    <!-- glimlach -->
+    <path d="M170 70 Q180 78 190 70" stroke="var(--ink)" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+    <!-- neusgat -->
+    <ellipse cx="185" cy="60" rx="2.5" ry="2" fill="var(--ink)"/>
+    <!-- oog wit -->
+    <circle cx="172" cy="50" r="9" fill="white" stroke="var(--ink)" stroke-width="1.5"/>
+    <!-- iris -->
+    <circle cx="173" cy="51" r="5.5" fill="var(--ink)"/>
+    <!-- glint -->
+    <circle cx="171" cy="49" r="2.2" fill="white"/>
     ${extras.join('\n    ')}
   </g>
 </svg>`;
 }
 
-/**
- * Bouw een inline SVG-string op voor een biped (twee benen).
- */
 function buildBipedSVG(opts = {}) {
   const { id = 'dino', headSize = 'large', extras = [] } = opts;
-  const hr = headSize === 'large' ? 32 : 24;
+  const hr = headSize === 'large' ? 32 : 26;
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200" aria-hidden="true">
-  <g id="${id}-dino">
-    <!-- benen -->
-    <rect x="80"  y="148" width="18" height="38" rx="6" fill="var(--dark)" />
-    <rect x="106" y="148" width="18" height="38" rx="6" fill="var(--dark)" />
-    <!-- voeten -->
-    <ellipse cx="89"  cy="186" rx="16" ry="8" fill="var(--dark)" />
-    <ellipse cx="115" cy="186" rx="16" ry="8" fill="var(--dark)" />
-    <!-- romp -->
-    <ellipse cx="102" cy="120" rx="42" ry="38" fill="var(--main)" />
-    <!-- buik -->
-    <ellipse cx="102" cy="128" rx="28" ry="24" fill="var(--belly)" />
-    <!-- armpje links -->
-    <ellipse cx="62" cy="118" rx="10" ry="18" fill="var(--main)" transform="rotate(20,62,118)" />
-    <!-- armpje rechts -->
-    <ellipse cx="142" cy="118" rx="10" ry="18" fill="var(--main)" transform="rotate(-20,142,118)" />
-    <!-- nek -->
-    <ellipse cx="102" cy="84" rx="18" ry="22" fill="var(--main)" />
-    <!-- hoofd -->
-    <ellipse cx="102" cy="56" rx="${hr}" ry="${hr - 4}" fill="var(--main)" />
-    <!-- oog-wit -->
-    <circle cx="118" cy="48" r="10" fill="var(--belly)" />
-    <!-- pupil -->
-    <circle cx="120" cy="48" r="5"  fill="var(--ink)" />
-    <!-- nostril -->
-    <ellipse cx="128" cy="60" rx="3" ry="2" fill="var(--dark)" />
-    <!-- bek -->
-    <path d="M110 66 Q124 76 138 66" stroke="var(--dark)" stroke-width="2.5" fill="none" />
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 210" width="200" height="210" aria-hidden="true">
+  <defs>
+    <filter id="${id}-shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="rgba(0,0,0,0.45)"/>
+    </filter>
+  </defs>
+  <g id="${id}-dino" filter="url(#${id}-shadow)">
     <!-- staart -->
-    <path d="M62 130 Q28 120 22 142 Q30 162 60 150" fill="var(--main)" />
+    <path d="M62 132 Q26 118 20 144 Q28 168 60 154 Q64 146 62 132Z"
+      fill="var(--main)" stroke="var(--ink)" stroke-width="2.2" stroke-linejoin="round"/>
+    <!-- benen -->
+    <rect x="80" y="150" width="17" height="36" rx="7" fill="var(--dark)" stroke="var(--ink)" stroke-width="1.8"/>
+    <rect x="105" y="150" width="17" height="36" rx="7" fill="var(--dark)" stroke="var(--ink)" stroke-width="1.8"/>
+    <!-- voeten met teentjes -->
+    <path d="M74 185 Q80 196 88 190 Q94 196 100 185" fill="var(--dark)" stroke="var(--ink)" stroke-width="1.5" stroke-linecap="round"/>
+    <path d="M99 185 Q105 196 113 190 Q119 196 125 185" fill="var(--dark)" stroke="var(--ink)" stroke-width="1.5" stroke-linecap="round"/>
+    <!-- romp -->
+    <ellipse cx="102" cy="118" rx="43" ry="40" fill="var(--main)" stroke="var(--ink)" stroke-width="2.5"/>
+    <!-- buik -->
+    <ellipse cx="104" cy="128" rx="29" ry="26" fill="var(--belly)" stroke="var(--ink)" stroke-width="1.5"/>
+    <!-- romp glans -->
+    <ellipse cx="88" cy="102" rx="22" ry="14" fill="rgba(255,255,255,0.18)"/>
+    <!-- armpje links -->
+    <path d="M62 110 Q44 120 46 134 Q52 140 58 132 Q60 120 68 114Z" fill="var(--main)" stroke="var(--ink)" stroke-width="1.8" stroke-linejoin="round"/>
+    <!-- armpje rechts -->
+    <path d="M142 110 Q160 120 158 134 Q152 140 146 132 Q144 120 136 114Z" fill="var(--main)" stroke="var(--ink)" stroke-width="1.8" stroke-linejoin="round"/>
+    <!-- nek -->
+    <ellipse cx="102" cy="82" rx="18" ry="23" fill="var(--main)" stroke="var(--ink)" stroke-width="2.2"/>
+    <!-- hoofd -->
+    <ellipse cx="104" cy="54" rx="${hr}" ry="${hr - 4}" fill="var(--main)" stroke="var(--ink)" stroke-width="2.5"/>
+    <!-- snuit -->
+    <ellipse cx="120" cy="64" rx="15" ry="10" fill="var(--main)" stroke="var(--ink)" stroke-width="2"/>
+    <!-- glimlach -->
+    <path d="M110 70 Q122 80 134 70" stroke="var(--ink)" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+    <!-- neusgat -->
+    <ellipse cx="126" cy="60" rx="2.5" ry="2" fill="var(--ink)"/>
+    <!-- oog wit -->
+    <circle cx="116" cy="46" r="10" fill="white" stroke="var(--ink)" stroke-width="1.5"/>
+    <!-- iris -->
+    <circle cx="117" cy="47" r="6" fill="var(--ink)"/>
+    <!-- glint -->
+    <circle cx="115" cy="45" r="2.5" fill="white"/>
     ${extras.join('\n    ')}
   </g>
 </svg>`;

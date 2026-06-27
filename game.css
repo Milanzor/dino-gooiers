@@ -22,7 +22,7 @@ body {
   width: 100%;
   height: 100%;
   touch-action: none;
-  cursor: crosshair;
+  cursor: default;
 }
 
 /* Loading overlay (shown until main.js dismisses it) */
