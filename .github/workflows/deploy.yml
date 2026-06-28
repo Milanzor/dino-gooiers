@@ -57,14 +57,23 @@ jobs:
           npx puppeteer browsers install chrome
 
       - name: Wait for Pages CDN propagation
-        run: sleep 20
+        run: sleep 25
 
       - name: Run browser smoke test
+        id: smoke
         working-directory: test
         env:
           GAME_URL: ${{ needs.deploy.outputs.page_url }}
           SHOTS_DIR: ${{ github.workspace }}/screenshots
-        run: node e2e.js
+        run: |
+          echo "## Dino Gooiers — Browser Smoke Test" >> $GITHUB_STEP_SUMMARY
+          echo "**URL:** $GAME_URL" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          node e2e.js 2>&1 | tee /tmp/e2e-output.txt
+          EXIT=${PIPESTATUS[0]}
+          cat /tmp/e2e-output.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          exit $EXIT
 
       - name: Upload screenshots as artifacts
         if: always()
@@ -72,4 +81,12 @@ jobs:
         with:
           name: gameplay-screenshots
           path: screenshots/
+          retention-days: 30
+
+      - name: Upload test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-log
+          path: /tmp/e2e-output.txt
           retention-days: 30

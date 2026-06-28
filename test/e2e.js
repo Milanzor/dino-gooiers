@@ -37,10 +37,11 @@ async function shot(page, name) {
   log('Launching browser...');
 
   const browser = await puppeteer.launch({
-    headless: 'new',
+    headless: true,
     args: [
       '--no-sandbox', '--disable-setuid-sandbox',
       '--disable-dev-shm-usage', '--disable-gpu',
+      '--disable-software-rasterizer',
     ],
   });
 
