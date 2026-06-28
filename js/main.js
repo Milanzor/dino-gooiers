@@ -152,6 +152,64 @@
     });
   }
 
+  // ── Sprite-state preload ────────────────────────────────────────────────────
+  // Loads assets/heroes/{id}/{state}.png for heroes that have multi-pose art.
+  // Results go into window.DinoSprites[id][state].
+  // gameplay.js uses _getDinoSprite(id, state) which falls back gracefully.
+
+  var SPRITE_HERO_IDS = ['chomp', 'trix', 'stomp', 'brons', 'dash', 'bolt'];
+  var SPRITE_STATES   = ['idle', 'selected', 'aim', 'fly', 'impact', 'victory', 'fail'];
+
+  function preloadDinoSprites() {
+    window.DinoSprites = {};
+    var total  = SPRITE_HERO_IDS.length * SPRITE_STATES.length;
+    var loaded = 0;
+
+    return new Promise(function (resolve) {
+      if (!total) { resolve(); return; }
+
+      SPRITE_HERO_IDS.forEach(function (id) {
+        window.DinoSprites[id] = {};
+        SPRITE_STATES.forEach(function (state) {
+          var img  = new Image();
+          var done = function () { loaded++; if (loaded === total) resolve(); };
+          img.onload = function () { window.DinoSprites[id][state] = img; done(); };
+          img.onerror = done;
+          img.src = 'assets/heroes/' + id + '/' + state + '.png';
+        });
+      });
+    });
+  }
+
+  // ── UI / background asset preload ───────────────────────────────────────────
+  // Loads optional art assets into window.UIImages[key].
+  // All assets are optional — onerror just skips the key.
+
+  var UI_ASSET_KEYS = [
+    'rope', 'crosshair', 'star_gold', 'star_gray', 'stars_gold', 'stars_gray',
+    'scorebar', 'btn_play', 'btn_pause', 'btn_restart', 'btn_back', 'btn_settings',
+  ];
+  var BG_ASSET_KEYS = ['background', 'background_1', 'background_2', 'background_3', 'ground'];
+
+  function preloadUIAssets() {
+    window.UIImages = {};
+    var keys  = UI_ASSET_KEYS.map(function (k) { return { key: k, path: 'assets/ui/' + k + '.png' }; })
+               .concat(BG_ASSET_KEYS.map(function (k) { return { key: k, path: 'assets/bg/' + k + '.png' }; }));
+    var total  = keys.length;
+    var loaded = 0;
+
+    return new Promise(function (resolve) {
+      if (!total) { resolve(); return; }
+      keys.forEach(function (item) {
+        var img  = new Image();
+        var done = function () { loaded++; if (loaded === total) resolve(); };
+        img.onload  = function () { window.UIImages[item.key] = img; done(); };
+        img.onerror = done;
+        img.src = item.path;
+      });
+    });
+  }
+
   // ── Storage restore ─────────────────────────────────────────────────────────
 
   function restoreProgress() {
@@ -720,8 +778,8 @@
       setLoadingText('Dino\'s laden…');
       setLoadingBar(0.12);
 
-      // ── Step 2: Preload all SVG dino assets ─────────────────────────────────
-      var loadPromise = preloadDinos();
+      // ── Step 2: Preload all SVG dino assets + state sprites + UI ───────────
+      var loadPromise = Promise.all([preloadDinos(), preloadDinoSprites(), preloadUIAssets()]);
 
       // ── Step 3: Restore saved progress ASAP ─────────────────────────────────
       restoreProgress();

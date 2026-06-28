@@ -64,12 +64,25 @@
   let _enemiesDefeated = 0;
   let _blocksDestroyed = 0;
   let _timer      = 0;
+  let _impactTimer = 0;      // counts down after hero hits something (shows impact sprite)
   let _particles  = [];
   let _cleanup    = null;
   let _isDragging = false;
   let _dragPos    = { x: REST_X, y: REST_Y };
   let _groundBody = null;
   let _explosions = [];       // { x, y, r, t, maxT }
+
+  // ── Sprite helper ─────────────────────────────────────────────────────────
+  // Returns the best image for a hero in a given animation state.
+  // Priority: DinoSprites[id][state] → DinoSprites[id].idle → DinoImages[id]
+
+  function _getDinoSprite(id, state) {
+    if (window.DinoSprites && window.DinoSprites[id]) {
+      const s = window.DinoSprites[id];
+      return s[state] || s.idle || null;
+    }
+    return (window.DinoImages && window.DinoImages[id]) || null;
+  }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -181,6 +194,8 @@
         const other  = dino === bA ? bB : bA;
         const gobj   = other._gobj;
         if (!gobj) return;
+
+        if (speed > 4) _impactTimer = 0.5; // show impact sprite briefly
 
         if (gobj.kind === 'block' && !gobj.destroyed) {
           const d = damage * _dmgMult * (_drillMode ? 2.5 : 1);
@@ -442,6 +457,7 @@
 
   function _update(dt) {
     _timer += dt;
+    if (_impactTimer > 0) _impactTimer = Math.max(0, _impactTimer - dt);
 
     // Update particles
     for (let i = _particles.length - 1; i >= 0; i--) {
@@ -552,6 +568,7 @@
     _phase      = 'AIMING';
     _powerUsed  = false;
     _isDragging = false;
+    _impactTimer = 0;
     _dragPos    = { x: REST_X, y: REST_Y };
     _groundBody = null;
     G.setState({ _dinoQueue: [_curDinoId].concat(_dinoQueue) });
@@ -603,6 +620,19 @@
 
   function _drawBackground(ctx) {
     const world = _level ? _level.world : 1;
+
+    // Use PNG background art when available (world-specific or generic)
+    const bgKey = 'background_' + world;
+    const bgImg = window.UIImages && (window.UIImages[bgKey] || (world === 1 && window.UIImages['background']));
+    if (bgImg) {
+      ctx.drawImage(bgImg, 0, 0, DW, DH);
+      // Dark gradient at bottom so ground blends with blocks area
+      const fade = ctx.createLinearGradient(0, DH * 0.78, 0, DH);
+      fade.addColorStop(0, 'transparent');
+      fade.addColorStop(1, 'rgba(0,0,0,.35)');
+      ctx.fillStyle = fade; ctx.fillRect(0, DH * 0.78, DW, DH * 0.22);
+      return;
+    }
 
     // Sky
     let skyColors;
@@ -928,11 +958,12 @@
       }
     }
 
-    if (window.DinoImages && dino && window.DinoImages[dino.id]) {
-      const img = window.DinoImages[dino.id];
+    const flyState = _impactTimer > 0 ? 'impact' : 'fly';
+    const flyImg = dino ? _getDinoSprite(dino.id, flyState) : null;
+    if (flyImg) {
       const sz = DINO_RADIUS * 3.2;
-      ctx.scale(-1, 1); // PNG faces left; flip so hero faces right toward enemies
-      ctx.drawImage(img, -sz * 0.52, -sz * 0.52, sz, sz);
+      ctx.scale(-1, 1);
+      ctx.drawImage(flyImg, -sz * 0.52, -sz * 0.52, sz, sz);
     } else if (dino) {
       _drawCartoonHero(ctx, dino, DINO_RADIUS, _t);
     } else {
@@ -1181,26 +1212,41 @@
     const dinoX = _dragPos.x;
     const dinoY = _dragPos.y;
 
-    // Cable
+    // Cable / rope
     ctx.save();
-    ctx.strokeStyle = '#2a3848';
-    ctx.lineWidth = _isDragging ? 3.5 : 2.5;
-    ctx.setLineDash(_isDragging ? [] : []);
-    ctx.beginPath();
-    ctx.moveTo(HOOK_X, HOOK_Y);
-
     if (_isDragging) {
-      // Rubber band — straight line to dragged position
+      // Rubber band — orange stretched line
       ctx.strokeStyle = '#ff8020';
+      ctx.lineWidth = 3.5;
+      ctx.beginPath();
+      ctx.moveTo(HOOK_X, HOOK_Y);
       ctx.lineTo(dinoX, dinoY);
+      ctx.stroke();
     } else {
-      // Natural cable droop (catenary approximation)
-      const midX = (HOOK_X + dinoX) / 2;
-      const midY = (HOOK_Y + dinoY) / 2 + Math.abs(dinoX - HOOK_X) * 0.05 + 10;
-      ctx.quadraticCurveTo(midX, midY, dinoX, dinoY);
+      const ropeImg = window.UIImages && window.UIImages.rope;
+      if (ropeImg) {
+        // Stretch rope image along the drooping cable path
+        const rdx = dinoX - HOOK_X, rdy = dinoY - HOOK_Y;
+        const rLen = Math.sqrt(rdx * rdx + rdy * rdy);
+        const rAngle = Math.atan2(rdy, rdx);
+        const ropeH = 14;
+        ctx.save();
+        ctx.translate(HOOK_X, HOOK_Y);
+        ctx.rotate(rAngle);
+        ctx.drawImage(ropeImg, 0, -ropeH / 2, rLen, ropeH);
+        ctx.restore();
+      } else {
+        // Programmatic catenary fallback
+        const midX = (HOOK_X + dinoX) / 2;
+        const midY = (HOOK_Y + dinoY) / 2 + Math.abs(dinoX - HOOK_X) * 0.05 + 10;
+        ctx.strokeStyle = '#2a3848';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(HOOK_X, HOOK_Y);
+        ctx.quadraticCurveTo(midX, midY, dinoX, dinoY);
+        ctx.stroke();
+      }
     }
-    ctx.stroke();
-    ctx.setLineDash([]);
     ctx.restore();
 
     // Dino hanging at rest
@@ -1216,10 +1262,12 @@
       ctx.beginPath(); ctx.arc(0, 0, 8, 0, Math.PI * 2); ctx.stroke();
     }
 
-    if (window.DinoImages && dino && window.DinoImages[dino.id]) {
-      const img = window.DinoImages[dino.id];
+    const craneState = _isDragging ? 'aim' : 'idle';
+    const craneImg = dino ? _getDinoSprite(dino.id, craneState) : null;
+    if (craneImg) {
       const sz = DINO_RADIUS * 3.4;
-      ctx.drawImage(img, -sz * 0.5, -sz * 0.4, sz, sz);
+      ctx.scale(-1, 1); // flip to face right toward enemies
+      ctx.drawImage(craneImg, -sz * 0.5, -sz * 0.4, sz, sz);
     } else if (dino) {
       const wobble = _isDragging ? 0 : Math.sin(_t * 3) * 0.08;
       ctx.rotate(wobble);
@@ -1236,13 +1284,15 @@
     const vy = (REST_Y - _dragPos.y) * LAUNCH_K;
     let px = _dragPos.x, py = _dragPos.y;
     let pvx = vx, pvy = vy;
-    const grav = 0.28; // approximation per preview step
+    const grav = 0.28;
+    let lastX = px, lastY = py;
 
     ctx.save();
     for (let i = 0; i < 72; i++) {
       px  += pvx; py  += pvy;
       pvy += grav;
       if (py > GROUND_Y || px > DW || px < 0) break;
+      lastX = px; lastY = py;
       const alpha = (1 - i / 72) * 0.72;
       const sz = 4.5 - i * 0.04;
       ctx.globalAlpha = alpha;
@@ -1250,6 +1300,25 @@
       ctx.beginPath(); ctx.arc(px, py, Math.max(sz, 2), 0, Math.PI * 2); ctx.fill();
     }
     ctx.globalAlpha = 1;
+
+    // Crosshair at landing point
+    const crosshairImg = window.UIImages && window.UIImages.crosshair;
+    if (crosshairImg) {
+      const csz = 52;
+      ctx.globalAlpha = 0.75 + Math.sin(_t * 4) * 0.15;
+      ctx.drawImage(crosshairImg, lastX - csz / 2, lastY - csz / 2, csz, csz);
+      ctx.globalAlpha = 1;
+    } else {
+      ctx.strokeStyle = 'rgba(255,80,0,.7)';
+      ctx.lineWidth = 1.5;
+      const csz = 12;
+      ctx.beginPath();
+      ctx.moveTo(lastX - csz, lastY); ctx.lineTo(lastX + csz, lastY);
+      ctx.moveTo(lastX, lastY - csz); ctx.lineTo(lastX, lastY + csz);
+      ctx.stroke();
+      ctx.beginPath(); ctx.arc(lastX, lastY, csz * 0.65, 0, Math.PI * 2); ctx.stroke();
+    }
+
     ctx.restore();
   }
 
@@ -1275,10 +1344,23 @@
     // Live star indicators below score
     const par = _level ? (_level.par || 3000) : 3000;
     const liveStar = _score >= par ? 3 : _score >= par * 0.65 ? 2 : 1;
+    const goldStar = window.UIImages && window.UIImages.star_gold;
+    const grayStar = window.UIImages && window.UIImages.star_gray;
     for (let s = 0; s < 3; s++) {
+      const lit = s < liveStar;
+      if (goldStar && grayStar) {
+        const si = goldStar.width > 0 ? (lit ? goldStar : grayStar) : null;
+        if (si) {
+          const ssz = 18;
+          ctx.globalAlpha = lit ? 1 : 0.5;
+          ctx.drawImage(si, DW - 24 - s * 20, 36, ssz, ssz);
+          ctx.globalAlpha = 1;
+          continue;
+        }
+      }
       ctx.font = '14px sans-serif';
       ctx.textAlign = 'right';
-      ctx.globalAlpha = (s < liveStar) ? 1 : 0.25;
+      ctx.globalAlpha = lit ? 1 : 0.25;
       shadow(ctx, 'rgba(0,0,0,.5)', 4);
       ctx.fillText('★', DW - 20 - s * 18, 50);
       noShadow(ctx);
@@ -1296,15 +1378,16 @@
       const alpha = i === 0 ? 1 : 0.55;
       ctx.globalAlpha = alpha;
 
-      if (window.DinoImages && window.DinoImages[id]) {
-        const img = window.DinoImages[id];
+      const qState = i === 0 ? 'selected' : 'idle';
+      const qImg = d ? _getDinoSprite(d.id, qState) : null;
+      if (qImg) {
         const sz = qr * 2.8;
         ctx.save();
         ctx.translate(qx, qy);
         ctx.scale(-1, 1);
-        ctx.drawImage(img, -sz * 0.5, -sz * 0.5, sz, sz);
+        ctx.drawImage(qImg, -sz * 0.5, -sz * 0.5, sz, sz);
         ctx.restore();
-      } else {
+      } else if (d) {
         ctx.fillStyle = d.colors.main;
         ctx.beginPath(); ctx.arc(qx, qy, qr, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = '#fff';
