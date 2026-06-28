@@ -135,8 +135,8 @@
             fallback.src     = d.svgDataURI;
           };
           img.src = 'assets/heroes/' + d.id + '.png';
-        } else if (ENEMY_IDS.indexOf(d.id) !== -1) {
-          // Try enemy PNG, fall back to SVG
+        } else if (ENEMY_IDS.indexOf(d.id) !== -1 || (d.id && d.id.indexOf('boss_') === 0)) {
+          // Try enemy/boss PNG from assets/enemies/, fall back to SVG
           img.onerror = function () {
             var fallback = new Image();
             fallback.onload  = function () { window.DinoImages[d.id] = fallback; finish(); };
