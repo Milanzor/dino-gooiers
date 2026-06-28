@@ -251,9 +251,16 @@
             'color:rgba(255,255,255,.65);margin-top:6px;letter-spacing:.06em">Gooi ze omver!</div>' +
         '</div>' +
 
-        // Bouncing stego
+        // Bouncing hero dino
         '<div style="position:relative;z-index:1;animation:sc-bounce 1.6s ease-in-out infinite;margin:6px 0 4px">' +
-          SVG_STEGO +
+          (function () {
+            var src = (window.DinoImages && window.DinoImages['rocky'])
+              ? window.DinoImages['rocky'].src
+              : 'assets/heroes/rocky.png';
+            return '<img src="' + src + '" width="200" height="200" alt="Rocky" ' +
+              'style="display:block;object-fit:contain;filter:drop-shadow(0 0 30px rgba(76,175,80,.65))" ' +
+              'onerror="this.onerror=null;this.style.display=\'none\'">';
+          }()) +
         '</div>' +
 
         // Tap prompt
@@ -395,13 +402,18 @@
         'animation:sc-smoke 2.6s ease-out ' + (i * 0.8) + 's infinite"></div>';
     }
 
-    // Rocky hero dino for menu
+    // Rocky hero dino for menu — use preloaded image (PNG or SVG fallback)
     var rockyImg = '';
-    if (window.DINO_ROSTER) {
-      var rocky = window.DINO_ROSTER.find(function (d) { return d.id === 'rocky'; });
-      if (rocky) {
-        rockyImg = '<img src="' + rocky.svgDataURI + '" width="130" height="104" alt="Rocky" ' +
-          'style="animation:sc-float 2.2s ease-in-out infinite;filter:drop-shadow(0 8px 18px rgba(0,200,0,.4))">';
+    var _rockyPreload = window.DinoImages && window.DinoImages['rocky'];
+    if (_rockyPreload) {
+      rockyImg = '<img src="' + _rockyPreload.src + '" width="160" height="160" alt="Rocky" ' +
+        'style="animation:sc-float 2.2s ease-in-out infinite;filter:drop-shadow(0 8px 24px rgba(0,200,0,.5))">';
+    } else if (window.DINO_ROSTER) {
+      var _rocky = window.DINO_ROSTER.find(function (d) { return d.id === 'rocky'; });
+      if (_rocky) {
+        rockyImg = '<img src="assets/heroes/rocky.png" width="160" height="160" alt="Rocky" ' +
+          'style="animation:sc-float 2.2s ease-in-out infinite;filter:drop-shadow(0 8px 24px rgba(0,200,0,.5))" ' +
+          'onerror="this.onerror=null;this.src=\'' + _rocky.svgDataURI.replace(/'/g, "\\'") + '\'">';
       }
     }
 
@@ -440,6 +452,9 @@
           '<button id="btn-worldmap" class="sc-btn sc-btn-purple" style="width:100%;font-size:clamp(.9rem,2.5vw,1.15rem);padding:clamp(10px,1.8vh,14px) 24px">' +
             '🗺  WERELD KAART' +
           '</button>' +
+          '<button id="btn-roster" class="sc-btn sc-btn-purple" style="width:100%;font-size:clamp(.9rem,2.5vw,1.15rem);padding:clamp(10px,1.8vh,14px) 24px">' +
+            '🦕  DINO ROSTER' +
+          '</button>' +
           '<button id="btn-shop" class="sc-btn sc-btn-purple" style="width:100%;font-size:clamp(.9rem,2.5vw,1.15rem);padding:clamp(10px,1.8vh,14px) 24px">' +
             '🛒  WINKEL' +
           '</button>' +
@@ -473,11 +488,14 @@
       var worldIdx = (G.state && G.state.currentWorld) ? G.state.currentWorld - 1 : 0;
       showWorldMap(worldIdx);
     });
+    $('btn-roster').addEventListener('click', function () {
+      showRoster();
+    });
     $('btn-shop').addEventListener('click', function () {
-      // Placeholder — winkel coming soon
+      showShop();
     });
     $('btn-settings').addEventListener('click', function () {
-      // Placeholder
+      showSettings();
     });
   }
 
@@ -955,6 +973,267 @@
     }, { once: true });
   }
 
+  // ── ROSTER SCREEN ────────────────────────────────────────────────────────────
+
+  function showRoster() {
+    G.showScreen('menu');
+
+    var rarityColors = {
+      common:    { bg: '#2e5e2e', border: '#4caf50', label: 'GEWOON',    text: '#a5d6a7' },
+      uncommon:  { bg: '#1a3a5e', border: '#4a90e2', label: 'ONGEWOON',  text: '#90caf9' },
+      rare:      { bg: '#3a1a5e', border: '#9c27b0', label: 'ZELDZAAM',  text: '#ce93d8' },
+      legendary: { bg: '#5e3a00', border: '#f5c842', label: 'LEGENDARISCH', text: '#fff176' },
+    };
+
+    var cards = '';
+    (window.DINO_ROSTER || []).forEach(function (d) {
+      var rc = rarityColors[d.rarity] || rarityColors.common;
+      var maxLv = (window.Game && window.Game.state && window.Game.state.maxLevel) || 1;
+      var unlocked = maxLv >= d.unlockLevel;
+      var imgSrc = (window.DinoImages && window.DinoImages[d.id])
+        ? window.DinoImages[d.id].src
+        : 'assets/heroes/' + d.id + '.png';
+
+      cards +=
+        '<div style="background:linear-gradient(160deg,' + rc.bg + ' 0%,rgba(10,6,20,.9) 100%);' +
+          'border:2px solid ' + (unlocked ? rc.border : 'rgba(255,255,255,.12)') + ';' +
+          'border-radius:16px;padding:14px 10px;text-align:center;' +
+          'opacity:' + (unlocked ? '1' : '0.45') + ';' +
+          'box-shadow:0 4px 18px rgba(0,0,0,.5);position:relative">' +
+
+          '<div style="position:absolute;top:8px;right:8px;font-family:\'Nunito\',sans-serif;' +
+            'font-size:8px;letter-spacing:.06em;color:' + rc.text + ';font-weight:800;' +
+            'background:rgba(0,0,0,.4);border-radius:6px;padding:2px 6px">' +
+            rc.label + '</div>' +
+
+          (unlocked ? '' : '<div style="position:absolute;top:8px;left:8px;font-size:.9rem">🔒</div>') +
+
+          '<div style="margin:0 auto 8px;width:80px;height:80px;display:flex;align-items:center;justify-content:center">' +
+            '<img src="' + imgSrc + '" width="80" height="80" alt="' + d.name + '" ' +
+              'style="object-fit:contain;filter:' + (unlocked ? 'drop-shadow(0 4px 10px rgba(0,0,0,.5))' : 'grayscale(1)') + '">' +
+          '</div>' +
+
+          '<div style="font-family:\'Bungee\',cursive;font-size:.85rem;color:' + (unlocked ? '#ffd23f' : '#888') + ';margin-bottom:4px">' +
+            d.name + '</div>' +
+
+          '<div style="font-family:\'Nunito\',sans-serif;font-size:.65rem;color:rgba(255,255,255,.5);margin-bottom:6px">' +
+            d.dutchName + '</div>' +
+
+          '<div style="font-family:\'Nunito\',sans-serif;font-size:.68rem;color:rgba(200,220,255,.75);' +
+            'line-height:1.4;min-height:38px">' +
+            (unlocked ? d.powerDescription : 'Vrijgespeeld op niveau ' + d.unlockLevel) + '</div>' +
+
+        '</div>';
+    });
+
+    setHTML(
+      '<div class="sc-full" style="background:linear-gradient(160deg,#0a0618 0%,#140a28 100%);' +
+        'display:flex;flex-direction:column;color:#fff;overflow:hidden">' +
+
+        '<div style="display:flex;align-items:center;justify-content:center;padding:14px 20px;' +
+          'background:rgba(0,0,0,.4);border-bottom:1px solid rgba(255,255,255,.1);flex-shrink:0;position:relative">' +
+          '<button id="btn-ros-back" class="sc-btn sc-btn-blue" style="position:absolute;left:16px;' +
+            'font-size:.85rem;padding:7px 14px;border-radius:10px">← Terug</button>' +
+          '<div style="text-align:center">' +
+            '<div style="font-family:\'Bungee\',cursive;font-size:clamp(1rem,3vw,1.6rem);color:#ffd23f">DINO ROSTER</div>' +
+            '<div style="font-family:\'Nunito\',sans-serif;font-size:.75rem;color:rgba(255,255,255,.45);margin-top:2px">' +
+              (window.DINO_ROSTER ? window.DINO_ROSTER.length : 0) + ' dino\'s beschikbaar</div>' +
+          '</div>' +
+        '</div>' +
+
+        '<div style="flex:1;overflow-y:auto;padding:16px 12px">' +
+          '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;' +
+            'max-width:900px;margin:0 auto">' +
+            cards +
+          '</div>' +
+        '</div>' +
+
+      '</div>'
+    );
+
+    $('btn-ros-back').addEventListener('click', function () { showMenu(); });
+  }
+
+  // ── SHOP / WINKEL SCREEN ──────────────────────────────────────────────────────
+
+  function showShop() {
+    G.showScreen('menu');
+
+    var coins = (window.Game && window.Game.state && window.Game.state.coins) || 0;
+
+    var HATS = [
+      { id: 'bouwhelm', emoji: '🪖', name: 'Bouwhelm',         desc: 'Professionele veiligheidshelm voor de bouwplaats.',  price: 40  },
+      { id: 'party',    emoji: '🎉', name: 'Partyhoedje',       desc: 'Voor als het feestje voorbij is maar je hoed niet.', price: 60  },
+      { id: 'cowboy',   emoji: '🤠', name: 'Cowboyhoed',        desc: 'Yee-haw! Perfect voor snelle raptors.',              price: 90  },
+      { id: 'viking',   emoji: '⚔️', name: 'Vikinghelm',        desc: 'Robuuste helm van de noormannen. Stoot-proof.',      price: 130 },
+      { id: 'tover',    emoji: '🧙', name: 'Tovenaarshoed',     desc: 'Magische krachten voor dino\'s met talent.',         price: 200 },
+      { id: 'kroon',    emoji: '👑', name: 'Koninklijke Kroon', desc: 'De ultieme statussymbool. Draag hem met trots.',     price: 350 },
+    ];
+
+    var savedHats = {};
+    try { savedHats = JSON.parse(localStorage.getItem('dg_hats') || '{}'); } catch(e) {}
+
+    var items = '';
+    HATS.forEach(function (hat) {
+      var owned = !!savedHats[hat.id];
+      var canAfford = coins >= hat.price;
+
+      items +=
+        '<div style="background:linear-gradient(160deg,#1e1040 0%,#0a0820 100%);' +
+          'border:2px solid ' + (owned ? '#ffd23f' : 'rgba(180,130,255,.2)') + ';' +
+          'border-radius:16px;padding:18px 14px;text-align:center;' +
+          'box-shadow:' + (owned ? '0 0 18px rgba(255,210,63,.25),' : '') + '0 4px 16px rgba(0,0,0,.5)">' +
+
+          '<div style="font-size:2.6rem;margin-bottom:8px;' +
+            (owned ? 'filter:drop-shadow(0 0 10px rgba(255,210,0,.6))' : '') + '">' +
+            hat.emoji + '</div>' +
+
+          '<div style="font-family:\'Bungee\',cursive;font-size:.9rem;color:' + (owned ? '#ffd23f' : '#fff') + ';margin-bottom:4px">' +
+            hat.name + '</div>' +
+
+          '<div style="font-family:\'Nunito\',sans-serif;font-size:.68rem;color:rgba(200,180,255,.7);' +
+            'line-height:1.4;margin-bottom:12px;min-height:38px">' +
+            hat.desc + '</div>' +
+
+          (owned
+            ? '<div style="font-family:\'Baloo 2\',cursive;font-size:.85rem;color:#ffd23f">✓ In bezit</div>'
+            : '<div style="display:flex;align-items:center;justify-content:center;gap:8px">' +
+                '<span style="font-family:\'Bungee\',cursive;font-size:.9rem;color:#ffd23f">🪙 ' + hat.price + '</span>' +
+                '<button class="sc-btn sc-btn-gold shop-buy-btn" data-hat="' + hat.id + '" data-price="' + hat.price + '" ' +
+                  'style="font-size:.75rem;padding:6px 14px;border-radius:10px;' + (canAfford ? '' : 'opacity:.4;pointer-events:none') + '">' +
+                  'KOPEN' +
+                '</button>' +
+              '</div>') +
+
+        '</div>';
+    });
+
+    setHTML(
+      '<div class="sc-full" style="background:linear-gradient(160deg,#0a0618 0%,#140a28 100%);' +
+        'display:flex;flex-direction:column;color:#fff;overflow:hidden">' +
+
+        '<div style="display:flex;align-items:center;justify-content:center;padding:14px 20px;' +
+          'background:rgba(0,0,0,.4);border-bottom:1px solid rgba(255,255,255,.1);flex-shrink:0;position:relative">' +
+          '<button id="btn-shop-back" class="sc-btn sc-btn-blue" style="position:absolute;left:16px;' +
+            'font-size:.85rem;padding:7px 14px;border-radius:10px">← Terug</button>' +
+          '<div style="text-align:center">' +
+            '<div style="font-family:\'Bungee\',cursive;font-size:clamp(1rem,3vw,1.6rem);color:#ffd23f">🛒 WINKEL</div>' +
+            '<div style="display:flex;align-items:center;gap:6px;justify-content:center;margin-top:4px">' +
+              '<span style="font-size:1.1rem">🪙</span>' +
+              '<span id="shop-coin-count" style="font-family:\'Baloo 2\',cursive;font-size:1rem;color:#ffd23f;font-weight:800">' +
+                coins.toLocaleString('nl') + '</span>' +
+              '<span style="font-family:\'Nunito\',sans-serif;font-size:.7rem;color:rgba(255,255,255,.4)">munten</span>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+
+        '<div style="flex:1;overflow-y:auto;padding:16px 12px">' +
+          '<div style="font-family:\'Nunito\',sans-serif;font-size:.85rem;color:rgba(255,200,120,.8);' +
+            'text-align:center;margin-bottom:14px">Hoeden voor je dino\'s — stijl is alles!</div>' +
+          '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;' +
+            'max-width:900px;margin:0 auto">' +
+            items +
+          '</div>' +
+        '</div>' +
+
+      '</div>'
+    );
+
+    $('btn-shop-back').addEventListener('click', function () { showMenu(); });
+
+    document.querySelectorAll('.shop-buy-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var hatId = btn.dataset.hat;
+        var price = parseInt(btn.dataset.price, 10);
+        var curCoins = (window.Game && window.Game.state && window.Game.state.coins) || 0;
+        if (curCoins < price) return;
+        var newCoins = curCoins - price;
+        if (window.Game) window.Game.setState({ coins: newCoins });
+        savedHats[hatId] = true;
+        try { localStorage.setItem('dg_hats', JSON.stringify(savedHats)); } catch(e) {}
+        showShop();
+      });
+    });
+  }
+
+  // ── SETTINGS SCREEN ──────────────────────────────────────────────────────────
+
+  function showSettings() {
+    G.showScreen('menu');
+
+    var soundOn = localStorage.getItem('dg_sound') !== 'off';
+    var version = 'v1.0';
+
+    setHTML(
+      '<div class="sc-full" style="background:linear-gradient(160deg,#0a0618 0%,#140a28 100%);' +
+        'display:flex;flex-direction:column;color:#fff;overflow:hidden">' +
+
+        '<div style="display:flex;align-items:center;justify-content:center;padding:14px 20px;' +
+          'background:rgba(0,0,0,.4);border-bottom:1px solid rgba(255,255,255,.1);flex-shrink:0;position:relative">' +
+          '<button id="btn-set-back" class="sc-btn sc-btn-blue" style="position:absolute;left:16px;' +
+            'font-size:.85rem;padding:7px 14px;border-radius:10px">← Terug</button>' +
+          '<div style="font-family:\'Bungee\',cursive;font-size:clamp(1rem,3vw,1.6rem);color:#ffd23f">⚙️ INSTELLINGEN</div>' +
+        '</div>' +
+
+        '<div style="flex:1;overflow-y:auto;padding:24px 20px;max-width:480px;margin:0 auto;width:100%">' +
+
+          '<div style="background:rgba(255,255,255,.06);border:1.5px solid rgba(255,255,255,.1);' +
+            'border-radius:14px;padding:16px 20px;margin-bottom:14px;' +
+            'display:flex;align-items:center;justify-content:space-between">' +
+            '<div>' +
+              '<div style="font-family:\'Baloo 2\',cursive;font-size:1rem;font-weight:700">🔊 Geluid</div>' +
+              '<div style="font-family:\'Nunito\',sans-serif;font-size:.75rem;color:rgba(255,255,255,.45);margin-top:2px">Speelgeluiden aan of uit</div>' +
+            '</div>' +
+            '<button id="btn-sound-toggle" class="sc-btn" style="' +
+              (soundOn
+                ? 'background:linear-gradient(180deg,#56c754,#2e8b2c);color:#fff;border:1.5px solid rgba(140,255,140,.3)'
+                : 'background:rgba(60,60,80,.8);color:rgba(255,255,255,.5);border:1.5px solid rgba(255,255,255,.12)') +
+              ';font-size:.85rem;padding:8px 18px;border-radius:10px;min-width:76px">' +
+              (soundOn ? 'AAN' : 'UIT') +
+            '</button>' +
+          '</div>' +
+
+          '<div style="background:rgba(255,255,255,.06);border:1.5px solid rgba(255,255,255,.1);' +
+            'border-radius:14px;padding:16px 20px;margin-bottom:14px;' +
+            'display:flex;align-items:center;justify-content:space-between">' +
+            '<div>' +
+              '<div style="font-family:\'Baloo 2\',cursive;font-size:1rem;font-weight:700">🗑️ Voortgang wissen</div>' +
+              '<div style="font-family:\'Nunito\',sans-serif;font-size:.75rem;color:rgba(255,255,255,.45);margin-top:2px">Alle niveaus en munten resetten</div>' +
+            '</div>' +
+            '<button id="btn-reset" class="sc-btn sc-btn-red" style="font-size:.85rem;padding:8px 18px;border-radius:10px">' +
+              'RESET' +
+            '</button>' +
+          '</div>' +
+
+          '<div style="text-align:center;margin-top:24px;font-family:\'Nunito\',sans-serif;' +
+            'font-size:.75rem;color:rgba(255,255,255,.25)">' +
+            'Dino Gooiers ' + version + ' — Bouw ze plat!' +
+          '</div>' +
+
+        '</div>' +
+
+      '</div>'
+    );
+
+    $('btn-set-back').addEventListener('click', function () { showMenu(); });
+
+    $('btn-sound-toggle').addEventListener('click', function () {
+      var isOn = localStorage.getItem('dg_sound') !== 'off';
+      localStorage.setItem('dg_sound', isOn ? 'off' : 'on');
+      showSettings();
+    });
+
+    $('btn-reset').addEventListener('click', function () {
+      if (!confirm('Weet je zeker dat je alle voortgang wilt wissen?')) return;
+      ['dg_maxlv','dg_best','dg_coins','dg_hats','dg_save'].forEach(function (k) {
+        localStorage.removeItem(k);
+      });
+      for (var i = 1; i <= 30; i++) localStorage.removeItem('dg_l' + i);
+      if (window.Game) window.Game.setState({ maxLevel: 1, stars: [], coins: 0 });
+      showMenu();
+    });
+  }
+
   // ── Public API ──────────────────────────────────────────────────────────────
 
   window.Screens = {
@@ -965,6 +1244,9 @@
     showLevelComplete: showLevelComplete,
     showGameOver:      showGameOver,
     showBossIntro:     showBossIntro,
+    showRoster:        showRoster,
+    showShop:          showShop,
+    showSettings:      showSettings,
     clearScreen:       clearScreen,
   };
 
@@ -979,7 +1261,7 @@
     ctx.fillRect(0, 0, G.DESIGN_WIDTH, G.DESIGN_HEIGHT);
   }
 
-  var _htmlScreens = ['splash', 'loading', 'menu', 'worldmap', 'levelcomplete', 'gameover'];
+  var _htmlScreens = ['splash', 'loading', 'menu', 'worldmap', 'levelcomplete', 'gameover', 'roster', 'shop', 'settings'];
   _htmlScreens.forEach(function (name) {
     G.registerScreen(name, {
       enter:  function () {},

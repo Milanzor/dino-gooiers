@@ -188,6 +188,16 @@
     },
 
     /**
+     * Persist coin balance. Updates only coins in the save slot.
+     * @param {number} coins
+     */
+    saveCoins: function (coins) {
+      var progress = this.loadProgress();
+      progress.coins = Math.max(0, Math.round(coins || 0));
+      this.saveProgress(progress);
+    },
+
+    /**
      * Wipe all Dino Gooiers data from localStorage.
      * For debug / settings reset only.
      */

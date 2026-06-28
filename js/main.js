@@ -147,9 +147,9 @@
   function restoreProgress() {
     try {
       var saved = window.Storage.load();
-      window.Game.setState({ maxLevel: saved.maxLevel, stars: saved.stars });
+      window.Game.setState({ maxLevel: saved.maxLevel, stars: saved.stars, coins: saved.coins || 0 });
     } catch (e) {
-      window.Game.setState({ maxLevel: 1, stars: [] });
+      window.Game.setState({ maxLevel: 1, stars: [], coins: 0 });
     }
   }
 
@@ -604,43 +604,46 @@
     var container = document.getElementById('mh-queue-icons');
     if (!container) return;
 
-    // Gather current dino queue from gameplay state
-    // gameplay.js exposes nothing publicly; we try to derive from Game.state
-    var G      = window.Game;
-    var screen = G && G.state && G.state.currentScreen;
-    if (screen !== 'gameplay') return;
+    var G = window.Game;
+    if (!G || !G.state || G.state.currentScreen !== 'gameplay') return;
 
-    // Rebuild queue display each tick only when count changes
-    // We can't directly access gameplay._dinoQueue; use DinoImages keys as proxy
-    // to at least render placeholder icons for remaining dinos via the level data
-    var level = window.LEVELS &&
-      window.LEVELS[Math.max(0, (G.state.currentLevel || 1) - 1)];
-    if (!level || (!level.dinoIds && !level.dinos)) return;
+    // Prefer live queue from gameplay state (updated by gameplay.js via setState)
+    var dinos = G.state._dinoQueue;
+    if (!dinos || !dinos.length) {
+      var level = window.LEVELS && window.LEVELS[Math.max(0, (G.state.currentLevel || 1) - 1)];
+      if (!level) return;
+      dinos = level.dinoIds || level.dinos || [];
+    }
 
-    var dinos  = level.dinoIds || level.dinos || [];
-    var wanted = dinos.length;
-    var current = container.children.length;
-    if (current === wanted) return; // no change — skip DOM thrash
-
+    // Rebuild only when content changes (compare serialised list)
+    var key = dinos.join(',');
+    if (container.dataset.qkey === key) return;
+    container.dataset.qkey = key;
     container.innerHTML = '';
-    dinos.forEach(function (dinoId) {
+
+    dinos.forEach(function (dinoId, idx) {
       var icon = document.createElement('div');
       icon.className = 'mh-dino-icon';
+      // First dino is active — highlight it
+      if (idx === 0) {
+        icon.style.border = '2px solid #ffd23f';
+        icon.style.boxShadow = '0 0 8px rgba(255,210,0,.6)';
+      }
 
       if (window.DinoImages && window.DinoImages[dinoId]) {
         var img = document.createElement('img');
         img.src    = window.DinoImages[dinoId].src;
         img.width  = 30;
         img.height = 30;
-        img.style.cssText = 'object-fit:contain;border-radius:50%';
+        img.style.cssText = 'object-fit:contain;border-radius:50%;' + (idx > 0 ? 'opacity:.55' : '');
         icon.appendChild(img);
       } else {
-        // Fallback: coloured initial
         var d = window.getDinoById && window.getDinoById(dinoId);
         icon.style.background = (d && d.colors && d.colors.main) || '#4caf50';
         icon.textContent = dinoId ? dinoId.charAt(0).toUpperCase() : '?';
         icon.style.color = '#fff';
         icon.style.fontWeight = '800';
+        if (idx > 0) icon.style.opacity = '0.55';
       }
       container.appendChild(icon);
     });

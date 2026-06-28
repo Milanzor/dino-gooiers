@@ -129,8 +129,10 @@
       const cfg = ENEMY_CFG[e.type] || ENEMY_CFG.grunt;
       const body = M.Bodies.circle(e.x, e.y, cfg.r, {
         density: 0.0015,
-        restitution: 0.3,
-        friction: 0.4,
+        restitution: 0.2,
+        friction: 0.7,
+        frictionAir: 0.06,
+        frictionStatic: 0.8,
         label: 'enemy',
       });
       const obj = { body, kind: 'enemy', type: e.type, r: cfg.r,
@@ -309,11 +311,11 @@
   function _onDragMove(e) {
     if (!_isDragging || _phase !== 'AIMING') return;
     let tx = e.position.x, ty = e.position.y;
-    const dx = tx - HOOK_X, dy = ty - HOOK_Y;
+    const dx = tx - REST_X, dy = ty - REST_Y;
     const dist = Math.sqrt(dx * dx + dy * dy);
     if (dist > MAX_PULL) {
-      tx = HOOK_X + (dx / dist) * MAX_PULL;
-      ty = HOOK_Y + (dy / dist) * MAX_PULL;
+      tx = REST_X + (dx / dist) * MAX_PULL;
+      ty = REST_Y + (dy / dist) * MAX_PULL;
     }
     _dragPos = { x: tx, y: ty };
   }
@@ -327,8 +329,8 @@
     if (!_isDragging || _phase !== 'AIMING') return;
     _isDragging = false;
 
-    const dx = _dragPos.x - HOOK_X;
-    const dy = _dragPos.y - HOOK_Y;
+    const dx = _dragPos.x - REST_X;
+    const dy = _dragPos.y - REST_Y;
     const dist = Math.sqrt(dx * dx + dy * dy);
     if (dist < 20) { _dragPos = { x: REST_X, y: REST_Y }; return; }
 
@@ -336,8 +338,8 @@
   }
 
   function _launch() {
-    const vx = (HOOK_X - _dragPos.x) * LAUNCH_K;
-    const vy = (HOOK_Y - _dragPos.y) * LAUNCH_K;
+    const vx = (REST_X - _dragPos.x) * LAUNCH_K;
+    const vy = (REST_Y - _dragPos.y) * LAUNCH_K;
     _activeBody = _createDinoBody(_dragPos.x, _dragPos.y);
     M.Body.setVelocity(_activeBody, { x: vx, y: vy });
     _dragPos = { x: REST_X, y: REST_Y };
@@ -499,13 +501,16 @@
       _score += dinoBonus;
       const par    = _level.par || 3000;
       const stars  = _score >= par ? 3 : _score >= par * 0.65 ? 2 : 1;
-      G.setState({ lastScore: _score, lastStars: stars });
+      const coinsEarned = Math.round(_score / 100);
+      const newCoins = (G.state.coins || 0) + coinsEarned;
+      G.setState({ lastScore: _score, lastStars: stars, coins: newCoins });
       window.Storage.saveLevel(G.state.currentLevel, stars, _score);
+      window.Storage.saveCoins(newCoins);
       // Update max level
       const saved = window.Storage.load();
       G.setState({ maxLevel: saved.maxLevel, stars: saved.stars });
       _phase = 'COMPLETE';
-      setTimeout(function () { G.emit('levelComplete', { levelId: G.state.currentLevel, stars: stars, score: _score, details: { enemiesDefeated: _enemiesDefeated, blocksDestroyed: _blocksDestroyed, bonusDinos: _dinoQueue.length } }); }, 600);
+      setTimeout(function () { G.emit('levelComplete', { levelId: G.state.currentLevel, stars: stars, score: _score, details: { enemiesDefeated: _enemiesDefeated, blocksDestroyed: _blocksDestroyed, bonusDinos: _dinoQueue.length, coinsEarned: coinsEarned } }); }, 600);
     } else if (_dinoQueue.length === 0) {
       // Game over
       G.setState({ lastScore: _score });
@@ -522,6 +527,7 @@
     _dragPos = { x: REST_X, y: REST_Y };
     _phase = 'AIMING';
     _timer = 0;
+    G.setState({ _dinoQueue: [_curDinoId].concat(_dinoQueue) });
   }
 
   // ── Screen enter / exit ───────────────────────────────────────────────────
@@ -548,6 +554,7 @@
     _isDragging = false;
     _dragPos    = { x: REST_X, y: REST_Y };
     _groundBody = null;
+    G.setState({ _dinoQueue: [_curDinoId].concat(_dinoQueue) });
 
     // Build new physics
     G.destroyPhysics();
@@ -778,8 +785,8 @@
       // Try SVG image
       if (window.DinoImages && window.DinoImages[obj.type]) {
         const img = window.DinoImages[obj.type];
-        const sz = r * 2.6;
-        ctx.drawImage(img, -sz * 0.55, -sz * 0.55, sz, sz);
+        const sz = r * 3.5;
+        ctx.drawImage(img, -sz * 0.5, -sz * 0.52, sz, sz);
       } else {
         _drawCartoonEnemy(ctx, obj.type, r, cfg, _t);
       }
@@ -1223,8 +1230,8 @@
   // ── Trajectory preview ────────────────────────────────────────────────────
 
   function _drawTrajectory(ctx) {
-    const vx = (HOOK_X - _dragPos.x) * LAUNCH_K;
-    const vy = (HOOK_Y - _dragPos.y) * LAUNCH_K;
+    const vx = (REST_X - _dragPos.x) * LAUNCH_K;
+    const vy = (REST_Y - _dragPos.y) * LAUNCH_K;
     let px = _dragPos.x, py = _dragPos.y;
     let pvx = vx, pvy = vy;
     const grav = 0.28; // approximation per preview step
@@ -1262,6 +1269,19 @@
     ctx.font = "800 24px 'Baloo 2', cursive";
     ctx.fillText(_score.toLocaleString('nl'), DW - 20, 30);
     noShadow(ctx);
+
+    // Live star indicators below score
+    const par = _level ? (_level.par || 3000) : 3000;
+    const liveStar = _score >= par ? 3 : _score >= par * 0.65 ? 2 : 1;
+    for (let s = 0; s < 3; s++) {
+      ctx.font = '14px sans-serif';
+      ctx.textAlign = 'right';
+      ctx.globalAlpha = (s < liveStar) ? 1 : 0.25;
+      shadow(ctx, 'rgba(0,0,0,.5)', 4);
+      ctx.fillText('★', DW - 20 - s * 18, 50);
+      noShadow(ctx);
+    }
+    ctx.globalAlpha = 1;
 
     // Dino queue — top-left
     const allDinos = [_curDinoId, ..._dinoQueue];
