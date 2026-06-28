@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -56,10 +56,7 @@ jobs:
         with:
           chrome-version: stable
 
-      - name: Print Chrome path
-        run: echo "Chrome at ${{ steps.setup-chrome.outputs.chrome-path }}"
-
-      - name: Install Puppeteer (no browser download needed)
+      - name: Install Puppeteer
         working-directory: test
         env:
           PUPPETEER_SKIP_DOWNLOAD: 'true'
@@ -71,32 +68,48 @@ jobs:
       - name: Run browser smoke test
         working-directory: test
         env:
-          GAME_URL: ${{ needs.deploy.outputs.page_url }}
+          GAME_URL: ${{ needs.deploy.outputs.page_url || 'https://milanzor.github.io/dino-gooiers/' }}
           SHOTS_DIR: ${{ github.workspace }}/screenshots
           CHROME_PATH: ${{ steps.setup-chrome.outputs.chrome-path }}
+        run: node e2e.js 2>&1 | tee /tmp/e2e-output.txt; exit ${PIPESTATUS[0]}
+
+      - name: Write test summary
+        if: always()
         run: |
           echo "## Dino Gooiers — Browser Smoke Test" >> $GITHUB_STEP_SUMMARY
-          echo "**URL:** $GAME_URL" >> $GITHUB_STEP_SUMMARY
-          echo "**Chrome:** $CHROME_PATH" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          node e2e.js 2>&1 | tee /tmp/e2e-output.txt
-          EXIT=${PIPESTATUS[0]}
-          cat /tmp/e2e-output.txt >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          exit $EXIT
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f /tmp/e2e-output.txt ]; then
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat /tmp/e2e-output.txt >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          else
+            echo "No test output captured." >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Screenshots" >> $GITHUB_STEP_SUMMARY
+          for f in ${{ github.workspace }}/screenshots/*.png; do
+            name=$(basename "$f")
+            echo "- [\`$name\`](https://raw.githubusercontent.com/Milanzor/dino-gooiers/test-results/screenshots/$name)" >> $GITHUB_STEP_SUMMARY
+          done
 
-      - name: Upload screenshots as artifacts
+      - name: Publish screenshots to test-results branch
+        if: always()
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git fetch origin test-results 2>/dev/null || true
+          git checkout -B test-results
+          mkdir -p screenshots
+          cp ${{ github.workspace }}/screenshots/*.png screenshots/ 2>/dev/null || true
+          [ -f /tmp/e2e-output.txt ] && cp /tmp/e2e-output.txt screenshots/test-output.txt || true
+          git add -f screenshots/
+          git commit -m "Browser test screenshots $(date -u +%Y-%m-%dT%H:%M:%SZ)" || true
+          git push origin test-results --force
+
+      - name: Upload screenshots artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: gameplay-screenshots
           path: screenshots/
-          retention-days: 30
-
-      - name: Upload test log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-log
-          path: /tmp/e2e-output.txt
           retention-days: 30
