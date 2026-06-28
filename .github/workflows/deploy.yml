@@ -1,4 +1,4 @@
-name: Deploy to GitHub Pages
+name: Deploy and Test
 
 on:
   push:
@@ -20,6 +20,8 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -35,3 +37,37 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  browser-test:
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Puppeteer (with bundled Chrome)
+        working-directory: test
+        run: npm ci
+
+      - name: Wait for Pages CDN propagation
+        run: sleep 20
+
+      - name: Run browser smoke test
+        working-directory: test
+        env:
+          GAME_URL: ${{ needs.deploy.outputs.page_url }}
+          SHOTS_DIR: ${{ github.workspace }}/screenshots
+        run: node e2e.js
+
+      - name: Upload screenshots as artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gameplay-screenshots
+          path: screenshots/
+          retention-days: 30
