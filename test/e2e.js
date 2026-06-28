@@ -34,16 +34,20 @@ async function shot(page, name) {
 
 (async () => {
   log('Target: ' + GAME_URL);
-  log('Launching browser...');
+  const chromePath = process.env.CHROME_PATH;
+  log('Launching browser' + (chromePath ? ' (' + chromePath + ')' : ' (bundled)') + '...');
 
-  const browser = await puppeteer.launch({
+  const launchOpts = {
     headless: true,
     args: [
       '--no-sandbox', '--disable-setuid-sandbox',
       '--disable-dev-shm-usage', '--disable-gpu',
       '--disable-software-rasterizer',
     ],
-  });
+  };
+  if (chromePath) launchOpts.executablePath = chromePath;
+
+  const browser = await puppeteer.launch(launchOpts);
 
   const page = await browser.newPage();
   await page.setViewport({ width: 1170, height: 540 });

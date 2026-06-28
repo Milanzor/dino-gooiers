@@ -50,24 +50,34 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install Puppeteer and download Chrome
+      - name: Install Chrome (stable)
+        uses: browser-actions/setup-chrome@v1
+        id: setup-chrome
+        with:
+          chrome-version: stable
+
+      - name: Print Chrome path
+        run: echo "Chrome at ${{ steps.setup-chrome.outputs.chrome-path }}"
+
+      - name: Install Puppeteer (no browser download needed)
         working-directory: test
-        run: |
-          npm install
-          npx puppeteer browsers install chrome
+        env:
+          PUPPETEER_SKIP_DOWNLOAD: 'true'
+        run: npm install
 
       - name: Wait for Pages CDN propagation
         run: sleep 25
 
       - name: Run browser smoke test
-        id: smoke
         working-directory: test
         env:
           GAME_URL: ${{ needs.deploy.outputs.page_url }}
           SHOTS_DIR: ${{ github.workspace }}/screenshots
+          CHROME_PATH: ${{ steps.setup-chrome.outputs.chrome-path }}
         run: |
           echo "## Dino Gooiers — Browser Smoke Test" >> $GITHUB_STEP_SUMMARY
           echo "**URL:** $GAME_URL" >> $GITHUB_STEP_SUMMARY
+          echo "**Chrome:** $CHROME_PATH" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           node e2e.js 2>&1 | tee /tmp/e2e-output.txt
           EXIT=${PIPESTATUS[0]}
