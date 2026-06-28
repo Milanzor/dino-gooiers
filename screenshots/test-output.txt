@@ -1,0 +1,82 @@
+[E2E] Target: https://milanzor.github.io/dino-gooiers/
+[E2E] Chrome: /opt/hostedtoolcache/setup-chrome/chromium/stable/x64/chrome
+[E2E] 
+[1] Page load
+  PASS  HTTP 200 OK
+[E2E] screenshot → 01-initial-load.png
+[E2E] 
+[2] Script init
+  PASS  window.Game exists
+  PASS  LEVELS loaded  [30 levels]
+  PASS  DINO_ROSTER loaded  [10 heroes]
+  PASS  Screens module present
+  PASS  Storage module present
+[E2E] 
+[3] Canvas
+  PASS  Canvas initialized  [1170x540]
+[E2E] 
+[4] Loading → Splash
+  PASS  Loading overlay hides
+[E2E] screenshot → 02-after-loading.png
+[E2E] 
+[5] PNG assets
+  PASS  DinoImages populated  [18 entries]
+  PASS  PNG assets loaded  [16 PNGs: sky, rocky, bone, dash, grunt, boss_mega_rex, helmet, bubba, bolt, shieldback, chomp, stomp, trix, king, brons, pim]
+[E2E] 
+[6] Splash screen
+  PASS  Splash screen rendered  [DINOGOOIERSGooi ze omver!TIK OM TE SPELENv1.0]
+[E2E] screenshot → 03-splash.png
+[E2E] 
+[7] Splash → Menu
+  PASS  Splash → main menu
+  PASS  SPELEN button visible  [▶  SPELEN]
+[E2E] screenshot → 04-main-menu.png
+[E2E] 
+[8] Menu → World map
+  PASS  → world map
+[E2E] screenshot → 05-worldmap.png
+[E2E] 
+[9] Level 1 start
+  PASS  Level 1 gameplay screen active
+[E2E] screenshot → 06-gameplay-start.png
+[E2E] 
+[10] Gameplay HUD
+  PASS  HUD element present
+  PASS  Canvas rendering  [1170x540]
+[E2E] 
+[11] Mouse drag / aim
+[E2E] screenshot → 07-aiming.png
+  PASS  Mouse drag-to-aim works
+[E2E] screenshot → 08-after-launch.png
+  PASS  Dino launched — physics running
+[E2E] 
+[12] Touch events
+  PASS  Touch tap on SPELEN registered
+[E2E] screenshot → 09-after-touch.png
+[E2E] 
+[13] Console errors
+  PASS  Zero JS errors during test run
+[E2E] 
+[14] Final art screenshot
+[E2E] screenshot → 10-final-gameplay.png
+  PASS  Final gameplay screenshot captured
+
+========================================================
+Dino Gooiers E2E  —  22 PASSED  0 FAILED
+Screenshots → /home/runner/work/dino-gooiers/dino-gooiers/screenshots
+========================================================
+
+All console errors:
+  ! Failed to load resource: the server responded with a status of 404 ()
+  ! Failed to load resource: the server responded with a status of 404 ()
+  ! Failed to load resource: the server responded with a status of 404 ()
+  ! Failed to load resource: the server responded with a status of 404 ()
+  ! Failed to load resource: the server responded with a status of 404 ()
+  ! Failed to load resource: the server responded with a status of 404 ()
+  ! Failed to load resource: the server responded with a status of 404 ()
+  ! Failed to load resource: the server responded with a status of 404 ()
+  ! Failed to load resource: the server responded with a status of 404 ()
+  ! Failed to load resource: the server responded with a status of 404 ()
+  ! Failed to load resource: the server responded with a status of 404 ()
+  ! Failed to load resource: the server responded with a status of 404 ()
+  ! Failed to load resource: the server responded with a status of 404 ()
