@@ -79,7 +79,8 @@
   function _getDinoSprite(id, state) {
     if (window.DinoSprites && window.DinoSprites[id]) {
       const s = window.DinoSprites[id];
-      return s[state] || s.idle || null;
+      const img = s[state] || s.idle;
+      if (img) return img;
     }
     return (window.DinoImages && window.DinoImages[id]) || null;
   }
@@ -621,12 +622,11 @@
   function _drawBackground(ctx) {
     const world = _level ? _level.world : 1;
 
-    // Use PNG background art when available (world-specific or generic)
+    // Use PNG background art for worlds 2+ only
     const bgKey = 'background_' + world;
-    const bgImg = window.UIImages && (window.UIImages[bgKey] || (world === 1 && window.UIImages['background']));
+    const bgImg = world > 1 && window.UIImages && window.UIImages[bgKey];
     if (bgImg) {
       ctx.drawImage(bgImg, 0, 0, DW, DH);
-      // Dark gradient at bottom so ground blends with blocks area
       const fade = ctx.createLinearGradient(0, DH * 0.78, 0, DH);
       fade.addColorStop(0, 'transparent');
       fade.addColorStop(1, 'rgba(0,0,0,.35)');
@@ -962,7 +962,6 @@
     const flyImg = dino ? _getDinoSprite(dino.id, flyState) : null;
     if (flyImg) {
       const sz = DINO_RADIUS * 3.2;
-      ctx.scale(-1, 1);
       ctx.drawImage(flyImg, -sz * 0.52, -sz * 0.52, sz, sz);
     } else if (dino) {
       _drawCartoonHero(ctx, dino, DINO_RADIUS, _t);
@@ -1266,7 +1265,6 @@
     const craneImg = dino ? _getDinoSprite(dino.id, craneState) : null;
     if (craneImg) {
       const sz = DINO_RADIUS * 3.4;
-      ctx.scale(-1, 1); // flip to face right toward enemies
       ctx.drawImage(craneImg, -sz * 0.5, -sz * 0.4, sz, sz);
     } else if (dino) {
       const wobble = _isDragging ? 0 : Math.sin(_t * 3) * 0.08;
@@ -1301,23 +1299,20 @@
     }
     ctx.globalAlpha = 1;
 
-    // Crosshair at landing point
-    const crosshairImg = window.UIImages && window.UIImages.crosshair;
-    if (crosshairImg) {
-      const csz = 52;
-      ctx.globalAlpha = 0.75 + Math.sin(_t * 4) * 0.15;
-      ctx.drawImage(crosshairImg, lastX - csz / 2, lastY - csz / 2, csz, csz);
-      ctx.globalAlpha = 1;
-    } else {
-      ctx.strokeStyle = 'rgba(255,80,0,.7)';
-      ctx.lineWidth = 1.5;
-      const csz = 12;
-      ctx.beginPath();
-      ctx.moveTo(lastX - csz, lastY); ctx.lineTo(lastX + csz, lastY);
-      ctx.moveTo(lastX, lastY - csz); ctx.lineTo(lastX, lastY + csz);
-      ctx.stroke();
-      ctx.beginPath(); ctx.arc(lastX, lastY, csz * 0.65, 0, Math.PI * 2); ctx.stroke();
-    }
+    // Crosshair at landing point (drawn programmatically — clean on any background)
+    const pulse = 0.75 + Math.sin(_t * 4) * 0.15;
+    ctx.globalAlpha = pulse;
+    ctx.strokeStyle = 'rgba(255,80,0,.85)';
+    ctx.lineWidth = 2;
+    const csz = 14;
+    ctx.beginPath();
+    ctx.moveTo(lastX - csz, lastY); ctx.lineTo(lastX - 4, lastY);
+    ctx.moveTo(lastX + 4, lastY);  ctx.lineTo(lastX + csz, lastY);
+    ctx.moveTo(lastX, lastY - csz); ctx.lineTo(lastX, lastY - 4);
+    ctx.moveTo(lastX, lastY + 4);  ctx.lineTo(lastX, lastY + csz);
+    ctx.stroke();
+    ctx.beginPath(); ctx.arc(lastX, lastY, 7, 0, Math.PI * 2); ctx.stroke();
+    ctx.globalAlpha = 1;
 
     ctx.restore();
   }
@@ -1384,7 +1379,6 @@
         const sz = qr * 2.8;
         ctx.save();
         ctx.translate(qx, qy);
-        ctx.scale(-1, 1);
         ctx.drawImage(qImg, -sz * 0.5, -sz * 0.5, sz, sz);
         ctx.restore();
       } else if (d) {
