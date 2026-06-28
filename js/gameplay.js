@@ -25,8 +25,8 @@
   const MAX_PULL    = 195;   // max drag distance from HOOK
   const LAUNCH_K    = 0.068; // velocity multiplier
   const DINO_RADIUS = 22;    // physics circle radius for launched dino
-  const SETTLE_TIME = 2.8;   // seconds to wait for physics to settle
-  const NEXT_DELAY  = 1.0;   // seconds between dinos
+  const SETTLE_TIME = 1.4;   // seconds to wait for physics to settle
+  const NEXT_DELAY  = 0.4;   // seconds between dinos
 
   // ── Block types ───────────────────────────────────────────────────────────
   const BLOCK_T = {
@@ -465,7 +465,7 @@
       const allOffScreen = allFlying.every(function (b) {
         return !b || b.position.x > DW + 100 || b.position.x < -100 || b.position.y > GROUND_Y + 80;
       });
-      if (allOffScreen || _timer > 8) {
+      if (allOffScreen || _timer > 5) {
         _phase = 'SETTLING';
         _timer = 0;
       }
