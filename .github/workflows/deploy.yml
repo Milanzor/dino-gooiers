@@ -50,9 +50,11 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install Puppeteer (with bundled Chrome)
+      - name: Install Puppeteer and download Chrome
         working-directory: test
-        run: npm ci
+        run: |
+          npm install
+          npx puppeteer browsers install chrome
 
       - name: Wait for Pages CDN propagation
         run: sleep 20
