@@ -91,8 +91,9 @@
   // ── Asset preloading ────────────────────────────────────────────────────────
 
   /**
-   * Creates an Image element for every dino / tirant / boss SVG data URI,
-   * caches results in window.DinoImages, and resolves once all are done.
+   * Creates an Image element for every dino.
+   * Tries PNG from assets/heroes/{id}.png first; falls back to SVG data URI.
+   * Caches results in window.DinoImages and resolves once all are loaded.
    * @returns {Promise<void>}
    */
   function preloadDinos() {
@@ -113,6 +114,8 @@
       var loaded = 0;
       var total  = all.length;
 
+      var HERO_IDS = ['rocky','chomp','sky','dash','stomp','trix','bolt','bubba','pim','brons'];
+
       all.forEach(function (d) {
         var img    = new Image();
         var finish = function () {
@@ -121,8 +124,20 @@
           if (loaded === total) resolve();
         };
         img.onload  = function () { window.DinoImages[d.id] = img; finish(); };
-        img.onerror = finish;
-        img.src     = d.svgDataURI;
+
+        if (HERO_IDS.indexOf(d.id) !== -1) {
+          // Load PNG; fall back to SVG if it fails
+          img.onerror = function () {
+            var fallback = new Image();
+            fallback.onload  = function () { window.DinoImages[d.id] = fallback; finish(); };
+            fallback.onerror = finish;
+            fallback.src     = d.svgDataURI;
+          };
+          img.src = 'assets/heroes/' + d.id + '.png';
+        } else {
+          img.onerror = finish;
+          img.src     = d.svgDataURI;
+        }
       });
     });
   }
