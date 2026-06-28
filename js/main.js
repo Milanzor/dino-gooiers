@@ -114,7 +114,8 @@
       var loaded = 0;
       var total  = all.length;
 
-      var HERO_IDS = ['rocky','chomp','sky','dash','stomp','trix','bolt','bubba','pim','brons'];
+      var HERO_IDS  = ['rocky','chomp','sky','dash','stomp','trix','bolt','bubba','pim','brons'];
+      var ENEMY_IDS = ['grunt','shieldback','helmet','king','bone'];
 
       all.forEach(function (d) {
         var img    = new Image();
@@ -126,7 +127,7 @@
         img.onload  = function () { window.DinoImages[d.id] = img; finish(); };
 
         if (HERO_IDS.indexOf(d.id) !== -1) {
-          // Load PNG; fall back to SVG if it fails
+          // Try hero PNG, fall back to SVG
           img.onerror = function () {
             var fallback = new Image();
             fallback.onload  = function () { window.DinoImages[d.id] = fallback; finish(); };
@@ -134,6 +135,15 @@
             fallback.src     = d.svgDataURI;
           };
           img.src = 'assets/heroes/' + d.id + '.png';
+        } else if (ENEMY_IDS.indexOf(d.id) !== -1) {
+          // Try enemy PNG, fall back to SVG
+          img.onerror = function () {
+            var fallback = new Image();
+            fallback.onload  = function () { window.DinoImages[d.id] = fallback; finish(); };
+            fallback.onerror = finish;
+            fallback.src     = d.svgDataURI;
+          };
+          img.src = 'assets/enemies/' + d.id + '.png';
         } else {
           img.onerror = finish;
           img.src     = d.svgDataURI;

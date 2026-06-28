@@ -782,6 +782,7 @@
       ctx.translate(b.position.x, b.position.y);
       ctx.rotate(b.angle);
 
+      ctx.scale(-1, 1); // flip so enemies face left (toward the player)
       // Try SVG image
       if (window.DinoImages && window.DinoImages[obj.type]) {
         const img = window.DinoImages[obj.type];
@@ -930,6 +931,7 @@
     if (window.DinoImages && dino && window.DinoImages[dino.id]) {
       const img = window.DinoImages[dino.id];
       const sz = DINO_RADIUS * 3.2;
+      ctx.scale(-1, 1); // PNG faces left; flip so hero faces right toward enemies
       ctx.drawImage(img, -sz * 0.52, -sz * 0.52, sz, sz);
     } else if (dino) {
       _drawCartoonHero(ctx, dino, DINO_RADIUS, _t);
@@ -1297,7 +1299,11 @@
       if (window.DinoImages && window.DinoImages[id]) {
         const img = window.DinoImages[id];
         const sz = qr * 2.8;
-        ctx.drawImage(img, qx - sz * 0.45, qy - sz * 0.45, sz, sz);
+        ctx.save();
+        ctx.translate(qx, qy);
+        ctx.scale(-1, 1);
+        ctx.drawImage(img, -sz * 0.5, -sz * 0.5, sz, sz);
+        ctx.restore();
       } else {
         ctx.fillStyle = d.colors.main;
         ctx.beginPath(); ctx.arc(qx, qy, qr, 0, Math.PI * 2); ctx.fill();

@@ -285,7 +285,7 @@
 
     _engine = M.Engine.create();
     _engine.gravity.x = 0;
-    _engine.gravity.y = 1.2;
+    _engine.gravity.y = 0.7;
 
     _world  = _engine.world;
 
